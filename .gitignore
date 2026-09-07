@@ -1,0 +1,62 @@
+# Build artifacts
+bin/
+obj/
+*.suo
+*.user
+*.ncb
+*.sln.docstates
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.log
+
+# Build output
+*.dll
+*.exe
+publish/
+*.msi
+
+# IDE
+.vs/
+.vscode/
+*.code-workspace
+.idea/
+
+# Runtime data - exclude user-specific runtime state
+USER_AI/data/
+USER_AI/ErrorLog/
+GUI/AzzyAIConfig/bin/
+GUI/AzzyAIConfig/obj/
+
+# Temp/backup files
+*.bak
+*.tmp
+*.~*
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# Build results specific to Visual Studio
+!*.dll
+
+# Skip GUI compiled artifacts but keep source
+GUI/AzzyAIConfig/bin/
+GUI/AzzyAIConfig/obj/
+GUI/AzzyAIConfig/*.csproj.user
+
+# Keep documentation but skip build logs
+build.log
+*.pdb
