@@ -1,67 +1,41 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KimiAI Refuge Documentation</title><style>body{font:16px/1.65 system-ui,Segoe UI,sans-serif;color:#202936;background:#f8fafc;margin:0}nav{background:#182d42;padding:16px 24px;display:flex;flex-wrap:wrap;gap:22px}nav a{color:white}main{max-width:1120px;margin:auto;padding:28px}section{background:white;padding:26px;margin:0 0 28px;border:1px solid #dae2eb;border-radius:8px}h1,h2,h3,h4{line-height:1.3;color:#183751}h2{margin-top:32px}table{border-collapse:collapse;display:block;overflow:auto;font-size:14px;margin:20px 0}th,td{border:1px solid #d5dee8;padding:9px 12px;vertical-align:top}th{background:#edf3f8;text-align:left}pre{overflow:auto;background:#f1f5f9;padding:16px}code{font-size:.92em}a{color:#17608e}@media print{nav{display:none}section{border:0;break-before:page}main{padding:0}table{font-size:10px}}</style></head><body><nav><a href="#readme">Install</a><a href="#guide">User Guide</a><a href="#blueprint">Blueprint</a><a href="#changelog">Changelog</a><a href="#skills">Skills</a></nav><main><section id="readme"><h1 id="kimiai-for-return-to-morroc-refuge">KimiAI for Return to Morroc Refuge</h1>
-<p><strong>Testing release â€” 13 September 2026</strong></p>
-<p>KimiAIConfig provides a Windows interface for configuring Kimi skills, movement, monster tactics, regular combos, and visual Blueprint graphs. This package is built for the Refuge client's <code>AI_sakray/USER_AI</code> directory.</p>
-<h2 id="install">Install</h2>
+<p><strong>Testing build.</strong> This package includes KimiAIConfig.exe, the matching Lua runtime, terrain data, and documentation. Recent gameplay changes still need in-game confirmation.</p>
+<h2 id="installation">Installation</h2>
 <ol>
-<li>Close the game and any open KimiAIConfig window.</li>
-<li>Back up the existing <code>AI_sakray/USER_AI</code> folder if you already use a custom AI.</li>
-<li>Open the ZIP and extract its <strong>contents directly into <code>AI_sakray/USER_AI</code></strong>. Do not add another <code>USER_AI</code> or package-name folder inside it.</li>
-<li>Run <code>KimiAIConfig.exe</code> from that folder. This build requires Windows with <strong>.NET Framework 4.8</strong>.</li>
-<li>Select your Kimi type in <strong>Kimi Settings</strong>. Open its named tab, configure <strong>Skills &amp; Behavior</strong>, <strong>Automatic Skills</strong>, and optionally <strong>Combo</strong>, then click <strong>Apply</strong>.</li>
-<li>Start the game using the client's custom/user AI mode, then summon Kimi. Restart the client after replacing runtime files to ensure it loads the updated scripts.</li>
+<li>Close the game and KimiAIConfig. Back up your existing <code>AI_sakray/USER_AI</code> folder.</li>
+<li>Extract the ZIP contents directly into <code>Refuge/AI_sakray/USER_AI/</code>. Do not add another nested folder.</li>
+<li>Run <code>KimiAIConfig.exe</code> from that folder. Windows with .NET Framework 4.8 is required.</li>
+<li>Select the correct Kimi type, open its named tab, enable learned skills, and set their levels. Configure automatic behavior or a combo, then click Apply.</li>
+<li>Use the client's custom/user AI mode and restart the client after replacing runtime files.</li>
 </ol>
-<p>Correct placement:</p>
-<pre><code class="language-text">Refuge/
-  AI_sakray/
-    USER_AI/
-      KimiAIConfig.exe
-      AI.lua
-      AI_main.lua
-      H_Config.lua
-      ...other Lua files and guides...
-      data/
-      ErrorLog/
-</code></pre>
-<p>The server folder is <strong>AI_sakray</strong>. Do not substitute <code>AI_salray</code> or the separate <code>AI/USER_AI</code> location. The supplied runtime uses the <code>AI_sakray/USER_AI</code> path.</p>
+<p>The required directory is <code>AI_sakray/USER_AI</code>, not <code>AI_salray</code> or the separate <code>AI/USER_AI</code> folder. The EXE installs its matching core scripts when settings are applied. Reopening an older EXE can restore older scripts.</p>
+<p>GitHub's source ZIP does not contain the compiled EXE. Source-build instructions are in the repository's top-level README.</p>
 <h2 id="first-configuration">First configuration</h2>
-<p>The package has a clean starting profile. Both combo systems, automatic skill selection, and automatic healing/buff toggles start off. All active skill levels display 1 and their Enabled switches are off. Normal movement and ordinary attacks still depend on the supplied behavior and monster tactics. Occult is the initial type selection; change it if needed.</p>
-<p>Enable only learned skills for the selected Kimi and set their available levels. Level selection does not unlock skills or satisfy loyalty requirements. For automatic attacks with skills, also enable UseAttackSkill. For a regular combo, enable ComboEnabled and ComboRunDuringAttack and fill consecutive slots. For a Blueprint graph, follow BLUEPRINT_GUIDE.md and enable BlueprintComboEnabled. Start with one system at a time.</p>
-<p>Automatic healing requires the skill's Enabled switch, UseChaoticHeal, and an appropriate UseAutoHeal mode. It checks the configured HP thresholds, SP, and timing. At or above a threshold, that HP condition does not trigger a heal. A Heal explicitly placed in a combo is a separate action.</p>
-<h2 id="updating-an-existing-installation">Updating an existing installation</h2>
-<p>This full ZIP includes clean settings and tactics for a new installation. <strong>Extracting it over existing files replaces files with the same names</strong>, including your settings. Keep your backup.</p>
-<p>To update while retaining a configuration already made with this GUI, replace only <code>KimiAIConfig.exe</code> and the guides, then open the new EXE. Its installer updates core runtime files and preserves existing user configuration files. Apply then saves your selected settings. Do not run an older EXE afterward: it can restore its older embedded runtime.</p>
-<p>The installer creates one-time <code>.bak</code> files for replaced core scripts. These are not a complete settings backup. Custom Lua changes in core files are overwritten by the embedded version.</p>
-<h2 id="guides">Guides</h2>
-<p>Use the GUI's <strong>Documentation</strong> menu or open <strong>Documentation.html</strong> for a browser-readable manual. The Markdown guides below contain the same material.</p>
+<p>Review all settings before testing; do not assume a supplied or imported profile matches your Kimi. Skill levels do not unlock skills or satisfy loyalty requirements.</p>
 <ul>
-<li><a href="USER_GUIDE.md">USER_GUIDE.md</a>: every tab, settings reference, tactics, healing, targeting, and regular combos.</li>
-<li><a href="BLUEPRINT_GUIDE.md">BLUEPRINT_GUIDE.md</a>: visual programming, node properties, connections, and examples.</li>
-<li><a href="KIMI_SKILLS.txt">KIMI_SKILLS.txt</a>: per-Kimi skills, IDs, maximum levels, categories, and loyalty requirements.</li>
-<li><a href="CHANGELOG.md">CHANGELOG.md</a>: implemented changes, reversions, and outstanding issues.</li>
-<li><a href="CREDITS.md">CREDITS.md</a>: original project acknowledgments and notices.</li>
+<li>Enable the desired skill and set its learned level. UseAttackSkill controls automatic attack skills. For a regular combo, enable ComboEnabled and ComboRunDuringAttack and configure consecutive slots.</li>
+<li>Choose UseAutoHeal and HP thresholds for Ward's Bastion Renewal or Occult's Chaotic Heal. Chaotic Heal needs its skill Enabled switch; there is no separate UseChaoticHeal requirement.</li>
+<li>Body Double uses its skill Enabled switch and UseAutoBD. HP threshold 0 plus a positive Body Double Cast Interval enables timed casting; positive thresholds use owner HP. Both 0 disables automatic casting. Buff duration does not delay recasting.</li>
+<li>Positive Bastion Renewal Cooldown values set its recast-attempt interval directly. Zero uses the stored 15-second default. The server decides whether an attempt succeeds.</li>
+<li>Master Swap uses its skill Enabled switch and owner HP threshold on Ward, Occult, and Agile. Threshold 0 disables automatic swapping.</li>
+<li>Tank – Gather starts combat at AutoMobCount, capped by TankMonsterLimit, or when no additional nearby eligible mobs remain. Tank – Pull retains the original behavior. TankMonsterLimit supports up to 30.</li>
 </ul>
-<h2 id="release-status">Release status</h2>
-<p>Regular combos are reported working in the latest user test. Exact one-hit auto-attack counting is not supported: an attack command can continue through a skill wait. Owner protection remains unresolved; the build includes additional rescue diagnostics. Some skill metadata and Blueprint paths remain unverified in-game. This is a testing release, not a claim that every exposed option works on Refuge.</p>
-<h2 id="troubleshooting">Troubleshooting</h2>
-<p><strong>Only ordinary attacks:</strong> confirm the correct EXE/folder, Kimi type, skill Enabled controls, UseAttackSkill or the chosen combo enable flag, and learned levels. Apply and restart the client after updating scripts.</p>
-<p><strong>Pauses between combo actions:</strong> check SP and cooldowns. Chaotic Heal costs 50% of maximum SP; the regular sequence waits for an unaffordable skill. A skill's cast time can exceed the configured minimum delay.</p>
-<p><strong>Owner not protected:</strong> reproduce with a known monster while Kimi is fighting another target. Record the monster name and time. Include the recent <code>[RESCUE CHECK]</code> lines rather than assuming the nearest monster is the attacker.</p>
-<p><strong>Report a problem:</strong> provide the Kimi type, skill levels, expected behavior, actual behavior, and timestamp. Include <code>H_Config.lua</code>, relevant monster tactics, and recent entries from <code>ErrorLog/AAI_ERROR.log</code> and <code>ErrorLog/AAI_SKILLFAIL.log</code>. For Blueprint issues, include <code>combo_tactics.cbp</code>. These logs contain ordinary diagnostics as well as failures and can grow during testing.</p>
-<h2 id="saving-another-configuration">Saving another configuration</h2>
-<p>Use File &gt; Export &gt; Kimi Settings to save a named Lua file. Use File &gt; Import &gt; Kimi Settings to load one, review the values, then Apply. This includes all four automatic and standard combo profiles. Monster tactics and Blueprint graphs use their own controls.</p>
-<p>Close every KimiAIConfig instance before replacing the EXE. The new EXE embeds the corrected runtime; reopening an older EXE can restore its older core Lua files.</p>
-<p><strong>Before testing a skill-only combo:</strong> check the target monster in Kimi Tactics. A specific row overrides Default. Skill usage = Never blocks offensive combo skills, even when owner rescue selects that monster. Change the specific row to Always if those skills should be allowed.</p>
-<p>For Ward automatic healing and a 30-cell AI boundary, see the Ward setup section in USER_GUIDE.md. Import Ward-30-cell-settings.lua through the GUI to review that setup. Wall routes and actor visibility still depend on the client.</p>
+<h2 id="saving-and-importing">Saving and importing</h2>
+<p>File &gt; Export &gt; Kimi Settings saves all four Kimi profiles, including automatic settings and regular combos. Import a settings file, review it, then Apply. Tactics and Blueprint graphs are separate files; Apply saves them too, but a Kimi Settings-only export does not include them.</p>
 <h2 id="map-navigation">Map navigation</h2>
-<p>In <strong>Kimi Settings</strong>, click the <strong>Navigation Map</strong> value and type any part of a map filename. Matching maps appear automatically below the field. Click the desired result, then click <strong>Apply</strong>. Clear the value to disable map navigation. Reload the AI after applying. Use <code>/where</code> in the game to identify the current map filename, for example <code>moc_pryd05</code>.</p>
-<p>The selector includes <strong>1,276 maps</strong> from the original Morroc renewal server cache, with imported map overrides applied. Only the selected map's terrain is loaded into AI memory. <strong>Disabled / Unknown map</strong> is the default and retains normal movement. Change the selection whenever you change maps; the AI cannot automatically identify your map. A wrong selection can prevent movement or produce incorrect routes. Missing map data falls back to normal movement.</p>
-<p>With a map selected, movement uses clear path segments of up to eight cells around known walls. Repeated movement commands are suppressed while Kimi is progressing along the same segment. Chase routes stay within the configured owner movement boundary, capped at 100 cells. The total walking route can be longer than 100 steps while staying within that boundary. Targets still follow existing tactics, chase permissions, and combo rules.</p>
-<p>Kiting rejects blocked tiles and diagonal wall corners. Ranged retreat also checks terrain line of sight. When no valid retreat exists, Kimi can continue an in-range cast instead of repeatedly moving into a known wall. Terrain does not include temporary server obstacles; visible occupied tiles and stalled waypoints are handled separately. This does not guarantee a route to every target or allow attacks through walls.</p>
-<p>The EXE includes and deploys <code>KimiNavigation.lua</code>, <code>NavigationMaps.txt</code>, and <code>NavigationData.txt</code>. Keep these files with the distributed runtime. Navigation has passed local route and syntax checks; in-game testing remains necessary.</p>
-<h3 id="returning-to-the-owner-and-100-cell-limits">Returning to the owner and 100-cell limits</h3>
-<p>Detection distances, movement bounds, and kite bounds support up to 100 cells. These limits do not increase skill casting range or the client's actor visibility. Off-screen combat is possible only while the client continues to report the target; terrain data cannot locate unseen monsters.</p>
-<p>With the correct map selected, normal movement uses terrain routing. Following and emergency return choose a reachable tile near the owner instead of a potentially blocked geometric destination. Return recovery can include Kimi's position outside the combat leash when the owner has moved away. No teleport command is added.</p>
-<p>With OpportunisticTargeting enabled, nearest eligible target selection runs before terrain routing, including when a skill is selected. It does not reset movement when the same target remains nearest. Nearest means distance from Kimi among eligible candidates; known unreachable targets are deprioritized. It is not a comparison of complete walking-route lengths. Active casts and rescue priorities remain protected. Long terrain searches are continued across AI updates to limit per-update work.</p>
+<p>Type part of a map filename into Navigation Map, choose a matching result, and Apply. Use <code>/where</code> to identify the map. Select a new map when changing maps; the AI cannot automatically identify it. Clear the field to disable terrain routing.</p>
+<p>The selector contains 1,276 maps. Only the selected terrain is loaded into AI memory. A wrong map selection can cause incorrect routes. Detection, movement, and kite settings support up to 100 cells, but cannot extend client actor visibility or skill range. Off-screen targets remain available only while the client reports them. Terrain routing does not add teleportation or permit attacks through walls.</p>
+<h2 id="guides">Guides</h2>
+<ul>
+<li><a href="USER_GUIDE.md">User guide</a>: tabs, skills, healing, movement, targeting, and combos.</li>
+<li><a href="BLUEPRINT_GUIDE.md">Blueprint guide</a>: visual programming and examples.</li>
+<li><a href="TACTICS_AND_EXTRAS.md">Tactics and extras</a>: monster behaviors and advanced options.</li>
+<li><a href="CHANGELOG.md">Changelog</a>: implemented changes and known limitations.</li>
+<li><a href="CREDITS.md">Credits</a>: acknowledgments and source notices.</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>Check the active Kimi profile, skill Enabled switch, level, SP, and relevant monster tactic. A specific monster tactic overrides Default and may block offensive combo skills.</p>
+<p>Enable Debug Logging temporarily, reproduce the issue, and report the timestamp, expected behavior, actual behavior, <code>H_Config.lua</code>, relevant tactics, and diagnostic log entries. Include the Blueprint file for Blueprint issues. Disable logging afterward. Cast requests do not confirm that the server accepted the skill.</p>
 </section><section id="guide"><h1 id="kimiai-user-guide">KimiAI User Guide</h1>
 <p>Return to Morroc Refuge - testing release. Documentation updated 14 September 2026.</p>
 <h2 id="how-to-use-this-guide">How to use this guide</h2>
@@ -2342,6 +2316,7 @@ ID     Name                   MaxLv  Type                             Internal n
 8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
 
 </pre></section></main></body></html>
+
 
 
 
