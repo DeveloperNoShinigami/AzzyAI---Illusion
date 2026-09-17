@@ -1,0 +1,2363 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KimiAI Refuge Documentation</title><style>body{font:16px/1.65 system-ui,Segoe UI,sans-serif;color:#202936;background:#f8fafc;margin:0}nav{background:#182d42;padding:16px 24px;display:flex;flex-wrap:wrap;gap:22px}nav a{color:white}main{max-width:1120px;margin:auto;padding:28px}section{background:white;padding:26px;margin:0 0 28px;border:1px solid #dae2eb;border-radius:8px}h1,h2,h3,h4{line-height:1.3;color:#183751}h2{margin-top:32px}table{border-collapse:collapse;display:block;overflow:auto;font-size:14px;margin:20px 0}th,td{border:1px solid #d5dee8;padding:9px 12px;vertical-align:top}th{background:#edf3f8;text-align:left}pre{overflow:auto;background:#f1f5f9;padding:16px}code{font-size:.92em}a{color:#17608e}@media print{nav{display:none}section{border:0;break-before:page}main{padding:0}table{font-size:10px}}</style></head><body><nav><a href="#readme">Install</a><a href="#guide">User Guide</a><a href="#blueprint">Blueprint</a><a href="#changelog">Changelog</a><a href="#skills">Skills</a></nav><main><section id="readme"><h1 id="kimiai-for-return-to-morroc-refuge">KimiAI for Return to Morroc Refuge</h1>
+<p><strong>Testing release â€” 13 September 2026</strong></p>
+<p>KimiAIConfig provides a Windows interface for configuring Kimi skills, movement, monster tactics, regular combos, and visual Blueprint graphs. This package is built for the Refuge client's <code>AI_sakray/USER_AI</code> directory.</p>
+<h2 id="install">Install</h2>
+<ol>
+<li>Close the game and any open KimiAIConfig window.</li>
+<li>Back up the existing <code>AI_sakray/USER_AI</code> folder if you already use a custom AI.</li>
+<li>Open the ZIP and extract its <strong>contents directly into <code>AI_sakray/USER_AI</code></strong>. Do not add another <code>USER_AI</code> or package-name folder inside it.</li>
+<li>Run <code>KimiAIConfig.exe</code> from that folder. This build requires Windows with <strong>.NET Framework 4.8</strong>.</li>
+<li>Select your Kimi type in <strong>Kimi Settings</strong>. Open its named tab, configure <strong>Skills &amp; Behavior</strong>, <strong>Automatic Skills</strong>, and optionally <strong>Combo</strong>, then click <strong>Apply</strong>.</li>
+<li>Start the game using the client's custom/user AI mode, then summon Kimi. Restart the client after replacing runtime files to ensure it loads the updated scripts.</li>
+</ol>
+<p>Correct placement:</p>
+<pre><code class="language-text">Refuge/
+  AI_sakray/
+    USER_AI/
+      KimiAIConfig.exe
+      AI.lua
+      AI_main.lua
+      H_Config.lua
+      ...other Lua files and guides...
+      data/
+      ErrorLog/
+</code></pre>
+<p>The server folder is <strong>AI_sakray</strong>. Do not substitute <code>AI_salray</code> or the separate <code>AI/USER_AI</code> location. The supplied runtime uses the <code>AI_sakray/USER_AI</code> path.</p>
+<h2 id="first-configuration">First configuration</h2>
+<p>The package has a clean starting profile. Both combo systems, automatic skill selection, and automatic healing/buff toggles start off. All active skill levels display 1 and their Enabled switches are off. Normal movement and ordinary attacks still depend on the supplied behavior and monster tactics. Occult is the initial type selection; change it if needed.</p>
+<p>Enable only learned skills for the selected Kimi and set their available levels. Level selection does not unlock skills or satisfy loyalty requirements. For automatic attacks with skills, also enable UseAttackSkill. For a regular combo, enable ComboEnabled and ComboRunDuringAttack and fill consecutive slots. For a Blueprint graph, follow BLUEPRINT_GUIDE.md and enable BlueprintComboEnabled. Start with one system at a time.</p>
+<p>Automatic healing requires the skill's Enabled switch, UseChaoticHeal, and an appropriate UseAutoHeal mode. It checks the configured HP thresholds, SP, and timing. At or above a threshold, that HP condition does not trigger a heal. A Heal explicitly placed in a combo is a separate action.</p>
+<h2 id="updating-an-existing-installation">Updating an existing installation</h2>
+<p>This full ZIP includes clean settings and tactics for a new installation. <strong>Extracting it over existing files replaces files with the same names</strong>, including your settings. Keep your backup.</p>
+<p>To update while retaining a configuration already made with this GUI, replace only <code>KimiAIConfig.exe</code> and the guides, then open the new EXE. Its installer updates core runtime files and preserves existing user configuration files. Apply then saves your selected settings. Do not run an older EXE afterward: it can restore its older embedded runtime.</p>
+<p>The installer creates one-time <code>.bak</code> files for replaced core scripts. These are not a complete settings backup. Custom Lua changes in core files are overwritten by the embedded version.</p>
+<h2 id="guides">Guides</h2>
+<p>Use the GUI's <strong>Documentation</strong> menu or open <strong>Documentation.html</strong> for a browser-readable manual. The Markdown guides below contain the same material.</p>
+<ul>
+<li><a href="USER_GUIDE.md">USER_GUIDE.md</a>: every tab, settings reference, tactics, healing, targeting, and regular combos.</li>
+<li><a href="BLUEPRINT_GUIDE.md">BLUEPRINT_GUIDE.md</a>: visual programming, node properties, connections, and examples.</li>
+<li><a href="KIMI_SKILLS.txt">KIMI_SKILLS.txt</a>: per-Kimi skills, IDs, maximum levels, categories, and loyalty requirements.</li>
+<li><a href="CHANGELOG.md">CHANGELOG.md</a>: implemented changes, reversions, and outstanding issues.</li>
+<li><a href="CREDITS.md">CREDITS.md</a>: original project acknowledgments and notices.</li>
+</ul>
+<h2 id="release-status">Release status</h2>
+<p>Regular combos are reported working in the latest user test. Exact one-hit auto-attack counting is not supported: an attack command can continue through a skill wait. Owner protection remains unresolved; the build includes additional rescue diagnostics. Some skill metadata and Blueprint paths remain unverified in-game. This is a testing release, not a claim that every exposed option works on Refuge.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p><strong>Only ordinary attacks:</strong> confirm the correct EXE/folder, Kimi type, skill Enabled controls, UseAttackSkill or the chosen combo enable flag, and learned levels. Apply and restart the client after updating scripts.</p>
+<p><strong>Pauses between combo actions:</strong> check SP and cooldowns. Chaotic Heal costs 50% of maximum SP; the regular sequence waits for an unaffordable skill. A skill's cast time can exceed the configured minimum delay.</p>
+<p><strong>Owner not protected:</strong> reproduce with a known monster while Kimi is fighting another target. Record the monster name and time. Include the recent <code>[RESCUE CHECK]</code> lines rather than assuming the nearest monster is the attacker.</p>
+<p><strong>Report a problem:</strong> provide the Kimi type, skill levels, expected behavior, actual behavior, and timestamp. Include <code>H_Config.lua</code>, relevant monster tactics, and recent entries from <code>ErrorLog/AAI_ERROR.log</code> and <code>ErrorLog/AAI_SKILLFAIL.log</code>. For Blueprint issues, include <code>combo_tactics.cbp</code>. These logs contain ordinary diagnostics as well as failures and can grow during testing.</p>
+<h2 id="saving-another-configuration">Saving another configuration</h2>
+<p>Use File &gt; Export &gt; Kimi Settings to save a named Lua file. Use File &gt; Import &gt; Kimi Settings to load one, review the values, then Apply. This includes all four automatic and standard combo profiles. Monster tactics and Blueprint graphs use their own controls.</p>
+<p>Close every KimiAIConfig instance before replacing the EXE. The new EXE embeds the corrected runtime; reopening an older EXE can restore its older core Lua files.</p>
+<p><strong>Before testing a skill-only combo:</strong> check the target monster in Kimi Tactics. A specific row overrides Default. Skill usage = Never blocks offensive combo skills, even when owner rescue selects that monster. Change the specific row to Always if those skills should be allowed.</p>
+<p>For Ward automatic healing and a 30-cell AI boundary, see the Ward setup section in USER_GUIDE.md. Import Ward-30-cell-settings.lua through the GUI to review that setup. Wall routes and actor visibility still depend on the client.</p>
+<h2 id="map-navigation">Map navigation</h2>
+<p>In <strong>Kimi Settings</strong>, click the <strong>Navigation Map</strong> value and type any part of a map filename. Matching maps appear automatically below the field. Click the desired result, then click <strong>Apply</strong>. Clear the value to disable map navigation. Reload the AI after applying. Use <code>/where</code> in the game to identify the current map filename, for example <code>moc_pryd05</code>.</p>
+<p>The selector includes <strong>1,276 maps</strong> from the original Morroc renewal server cache, with imported map overrides applied. Only the selected map's terrain is loaded into AI memory. <strong>Disabled / Unknown map</strong> is the default and retains normal movement. Change the selection whenever you change maps; the AI cannot automatically identify your map. A wrong selection can prevent movement or produce incorrect routes. Missing map data falls back to normal movement.</p>
+<p>With a map selected, movement uses clear path segments of up to eight cells around known walls. Repeated movement commands are suppressed while Kimi is progressing along the same segment. Chase routes stay within the configured owner movement boundary, capped at 100 cells. The total walking route can be longer than 100 steps while staying within that boundary. Targets still follow existing tactics, chase permissions, and combo rules.</p>
+<p>Kiting rejects blocked tiles and diagonal wall corners. Ranged retreat also checks terrain line of sight. When no valid retreat exists, Kimi can continue an in-range cast instead of repeatedly moving into a known wall. Terrain does not include temporary server obstacles; visible occupied tiles and stalled waypoints are handled separately. This does not guarantee a route to every target or allow attacks through walls.</p>
+<p>The EXE includes and deploys <code>KimiNavigation.lua</code>, <code>NavigationMaps.txt</code>, and <code>NavigationData.txt</code>. Keep these files with the distributed runtime. Navigation has passed local route and syntax checks; in-game testing remains necessary.</p>
+<h3 id="returning-to-the-owner-and-100-cell-limits">Returning to the owner and 100-cell limits</h3>
+<p>Detection distances, movement bounds, and kite bounds support up to 100 cells. These limits do not increase skill casting range or the client's actor visibility. Off-screen combat is possible only while the client continues to report the target; terrain data cannot locate unseen monsters.</p>
+<p>With the correct map selected, normal movement uses terrain routing. Following and emergency return choose a reachable tile near the owner instead of a potentially blocked geometric destination. Return recovery can include Kimi's position outside the combat leash when the owner has moved away. No teleport command is added.</p>
+<p>With OpportunisticTargeting enabled, nearest eligible target selection runs before terrain routing, including when a skill is selected. It does not reset movement when the same target remains nearest. Nearest means distance from Kimi among eligible candidates; known unreachable targets are deprioritized. It is not a comparison of complete walking-route lengths. Active casts and rescue priorities remain protected. Long terrain searches are continued across AI updates to limit per-update work.</p>
+</section><section id="guide"><h1 id="kimiai-user-guide">KimiAI User Guide</h1>
+<p>Return to Morroc Refuge - testing release. Documentation updated 14 September 2026.</p>
+<h2 id="how-to-use-this-guide">How to use this guide</h2>
+<p>The application has nine main tabs: <strong>Kimi Settings</strong>, <strong>Ward</strong>, <strong>Occult</strong>, <strong>Agile</strong>, <strong>Raging</strong>, <strong>Kimi Tactics</strong>, <strong>Blueprint (Shared)</strong>, <strong>PVP Tactics</strong>, and <strong>Extra Options</strong>. Select the configured Kimi in Kimi Settings, then open its named tab to configure skills, automatic casting, and standard combos.</p>
+<p>This guide uses the labels and property names from the current executable. Some inherited GUI descriptions refer to older homunculus skills or imply broader behavior than the runtime implements. The explanations here call out those differences. An available control is not a guarantee of verified server support.</p>
+<h3 id="current-tab-layout">Current tab layout</h3>
+<table>
+<thead>
+<tr>
+<th>Location</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kimi Settings</td>
+<td>Configured Kimi type, shared movement, targeting, protection, and general behavior.</td>
+</tr>
+<tr>
+<td>Ward / Occult / Agile / Raging: Skills &amp; Behavior</td>
+<td>Applicable skill levels, Enabled switches, and passive information. Shared skills retain shared level and enable values.</td>
+</tr>
+<tr>
+<td>Each Kimi: Automatic Skills</td>
+<td>Independent automatic attack, AoE, SP reserve, delay, and applicable buff controls.</td>
+</tr>
+<tr>
+<td>Each Kimi: Combo</td>
+<td>Independent standard combo settings and eight slots. Skill choices are filtered for that Kimi.</td>
+</tr>
+<tr>
+<td>Blueprint (Shared)</td>
+<td>Shared graph editor; Kimi Type conditions can select a sequence for each type.</td>
+</tr>
+</tbody>
+</table>
+<p>Opening a tab changes only the view. Existing standard combos migrate to the configured Kimi; older global automatic settings are initially inherited by all four profiles. Kimi Settings import/export includes these profiles. Blueprint graphs and monster tactics retain separate save/load controls.</p>
+<h3 id="occult-automatic-healing">Occult automatic healing</h3>
+<p>Enable Chaotic Heal in Skills &amp; Behavior. In Automatic Skills, choose a UseAutoHeal mode. Set ChaoticHealKimiHP and ChaoticHealOwnerHP for the desired thresholds. Automatic healing stops triggering at or above the corresponding threshold. Never disables the check; Always, Idle, and Idle_low control when it runs. Idle_low has lower priority, not a different HP requirement.</p>
+<p>HealSelfHP and HealOwnerHP are hidden legacy fallback fields retained in saved files. UseAutoHeal is available on Ward and Occult because it controls healing scheduling.</p>
+<h3 id="aoe-sizes-and-range-checks">AoE sizes and range checks</h3>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Area</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Illusion of Light</td>
+<td>3x3 square; maximum skill level remains 5.</td>
+</tr>
+<tr>
+<td>Chaotic Sanctuary</td>
+<td>5x5 square.</td>
+</tr>
+<tr>
+<td>Blood Sweep</td>
+<td>5x5 square at levels 1-10.</td>
+</tr>
+<tr>
+<td>Ward's Domain</td>
+<td>Radius of 4 cells around Ward.</td>
+</tr>
+<tr>
+<td>Taunt</td>
+<td>Radius of 5 / 5 / 6 / 6 / 7 cells at levels 1-5.</td>
+</tr>
+</tbody>
+</table>
+<p>Self-centered AoE checks now use the effect radius rather than zero self-cast range. Enabled Kimi AoE skills no longer depend on hidden legacy homunculus toggles. Visible AutoMobMode, AutoMobCount, SP, skill enablement, and timing conditions still apply. Area metadata does not add an automatic casting path for Chaotic Sanctuary.</p>
+<h3 id="current-skill-names">Current skill names</h3>
+<p>The GUI uses Bastion Renewal for its level, Enabled switch, and HP threshold. UseAutoHeal schedules automatic casting. Bastion Renewal and the old Warm Def alias both resolve to skill ID 8006. Legacy Lua keys remain unchanged for saved-file compatibility.</p>
+<h2 id="map-navigation">Map navigation</h2>
+<p>In <strong>Kimi Settings</strong>, click the <strong>Navigation Map</strong> value and type any part of a map filename. Matching maps appear automatically below the field. Click the desired result, then click <strong>Apply</strong>. Clear the value to disable map navigation. Reload the AI after applying. Use <code>/where</code> in the game to identify the current map filename, for example <code>moc_pryd05</code>.</p>
+<p>The selector includes <strong>1,276 maps</strong> from the original Morroc renewal server cache, with imported map overrides applied. Only the selected map's terrain is loaded into AI memory. <strong>Disabled / Unknown map</strong> is the default and retains normal movement. Change the selection whenever you change maps; the AI cannot automatically identify your map. A wrong selection can prevent movement or produce incorrect routes. Missing map data falls back to normal movement.</p>
+<p>With a map selected, movement uses clear path segments of up to eight cells around known walls. Repeated movement commands are suppressed while Kimi is progressing along the same segment. There is no fixed wait before searching a new route. Repeating an unchanged failed route has a one-second retry backoff; a different destination or changed position can be checked immediately. Chase routes stay within the configured owner movement boundary, capped at 100 cells. The total walking route can be longer than 100 steps while staying within that boundary. Targets still follow existing tactics, chase permissions, and combo rules.</p>
+<p>Kiting rejects blocked tiles and diagonal wall corners. Ranged retreat also checks terrain line of sight. When no valid retreat exists, Kimi can continue an in-range cast instead of repeatedly moving into a known wall. Terrain does not include temporary server obstacles; visible occupied tiles and stalled waypoints are handled separately. This does not guarantee a route to every target or allow attacks through walls.</p>
+<p>The EXE includes and deploys <code>KimiNavigation.lua</code>, <code>NavigationMaps.txt</code>, and <code>NavigationData.txt</code>. Keep these files with the distributed runtime. Navigation has passed local route and syntax checks; in-game testing remains necessary.</p>
+<h2 id="kimi-settings">Kimi Settings</h2>
+<p>This tab is a categorized property grid. Select a row to edit its value and read its help text. True/False fields are switches; integer switches use 1/0. HP and SP percentages are measured against the corresponding maximum. Distances are generally map cells. Fields with Delay or Time in their names commonly use milliseconds; exceptions are identified below.</p>
+<h3 id="skills-and-available-levels">Skills and available levels</h3>
+<p>The four types are Ward (6001), Occult (6002), Agile (6003), and Raging (6004). There are 24 distinct skills: 16 active and 8 passive. Shared skills appear under more than one type. KIMI_SKILLS.txt lists IDs, categories, maximum levels, and loyalty requirements.</p>
+<p>Every active skill has separate <strong>Level</strong> and <strong>Enabled</strong> controls. A displayed level of 1 does not enable or unlock a skill. Set the level to what the character has learned, then enable it. Passive summaries are reference information; the AI cannot cast passives. The clean release starts with all active skills disabled and all displayed levels at 1.</p>
+<h3 id="healing-and-combat-timing">Healing and combat timing</h3>
+<p>Automatic Chaotic Heal and a Heal explicitly placed in a combo are separate uses of the skill. Automatic healing checks HP thresholds. A combo Heal follows its slot or node and does not gain an automatic HP condition unless the graph explicitly includes one.</p>
+<p>Automatic healing triggers below the configured HP threshold and stops triggering at or above it. Idle and Idle_low differ in priority, not in their HP requirement. Idle healing has not yet been confirmed under a controlled in-game test. There is no additional fixed idle-heal interval in this release.</p>
+<p>Chaotic Heal costs 50% of maximum SP. A regular combo waits at a temporarily unaffordable skill, which can look like a pause or stall. Cast time and cooldown also delay the next eligible action. Native auto-attack commands can continue attacking during these waits, so an attack count is not an exact number of landed hits.</p>
+<h3 id="targeting-and-owner-protection">Targeting and owner protection</h3>
+<p>With OpportunisticTargeting disabled, normal selection uses tactics priority first and distance as a tie-breaker. When enabled, ordinary selection prefers the nearest eligible reachable target and reconsiders it during chase and combat without interrupting an active cast. Rescue is separate: per-monster Rescue settings, owner HP override, movement bounds, target visibility, and AI state determine eligibility.</p>
+<p>The owner-ID compatibility fix is included, but protection still failed in subsequent testing. Throttled <code>[RESCUE CHECK]</code> diagnostics record owner and monster target IDs, tactics, distances, and eligibility. Do not rely on this build as verified automatic owner protection.</p>
+<h3 id="complete-settings-reference">Complete settings reference</h3>
+<p>The following tables cover shared settings and the four named Kimi tabs. AutoSkill and Autobuff options appear under Automatic Skills; standard combo options appear under Combo. Choices are shown where the GUI supplies an enum; numbers are not universal recommended values. Skills use the level range in their explanation. See the fresh-start profile in README.md rather than assuming the GUI's Reset to Defaults matches the packaged profile.</p>
+<h4 id="basic-options">Basic Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AggroHP</td>
+<td>Number</td>
+<td>Your Kimi will seek out and attack monsters whenever its HP percent (as percent of maximum HP; a number from 0-100) is greater than this value. When it lacks HP, it will only fight monsters if it is attacked. Set this value to 100 if you do not want the Kimi to attack unless it, the owner, or a friend is attacked.</td>
+</tr>
+<tr>
+<td>AggroSP</td>
+<td>Number</td>
+<td>Your Kimi will seek out and attack monsters whenever its SP percent (as percent of maximum SP; a number from 0-100) is greater than this value. When it lacks SP, it will only fight monsters if it is attacked.</td>
+</tr>
+<tr>
+<td>KiteMonsters</td>
+<td>False, True</td>
+<td>Set this to true if you want your Kimi to keep its distance from monsters while attacking.</td>
+</tr>
+<tr>
+<td>SuperPassive</td>
+<td>False, True</td>
+<td>Suppress normal combat behavior. This is a passive operating mode, not an owner-protection option.</td>
+</tr>
+<tr>
+<td>UseAttackSkill</td>
+<td>False, True</td>
+<td>Enable autoskills outside of combos (single-target + AoE when allowed). Set to false to use only combos/auto-attacks and buffs/heals.</td>
+</tr>
+<tr>
+<td>AssumeHomun</td>
+<td>False, True</td>
+<td>Legacy compatibility option for identifying a companion when a mercenary and Kimi are both present. It is not a Kimi type selector.</td>
+</tr>
+<tr>
+<td>DoNotChase</td>
+<td>False, True</td>
+<td>If you want your Kimi to stand still and only use ranged skills or attacks, set this value to true.</td>
+</tr>
+<tr>
+<td>UseDanceAttack</td>
+<td>False, True</td>
+<td>Alternate movement and attack commands. This can affect positioning and timing; it does not change the server's attack-speed rules.</td>
+</tr>
+<tr>
+<td>UseAvoid</td>
+<td>False, True</td>
+<td>Exit when a monster listed in H_Avoid.lua is detected. Leave disabled unless you deliberately maintain that list.</td>
+</tr>
+<tr>
+<td>TankMonsterLimit</td>
+<td>1-30, default 30</td>
+<td>Maximum gathering target. Tank - Pull holds the collected monsters; Tank - Gather uses AutoMobCount as its target, capped by this limit.</td>
+</tr>
+<tr>
+<td>RescueOwnerLowHP</td>
+<td>Number</td>
+<td>Positive: request rescue below this owner HP percentage, overriding the monster rescue tactic. Negative: suppress owner rescue above the absolute percentage. Zero: rely on monster rescue tactics. Follow state still blocks rescue; attacker detection requires a client-reported owner target.</td>
+</tr>
+<tr>
+<td>StationaryAggroDist</td>
+<td>Number</td>
+<td>When the owner is is not moving, attack monsters within this distance of the owner.</td>
+</tr>
+<tr>
+<td>MobileAggroDist</td>
+<td>Number</td>
+<td>When the owner is is moving, attack monsters within this distance of the owner. See also StationaryAggroDist. This should probably be relatively low so that the Kimi does not get left behind after chasing something while the owner is moving</td>
+</tr>
+<tr>
+<td>OldHomunType</td>
+<td>Ward, Occult, Agile, Raging</td>
+<td>Choose Ward, Occult, Agile, or Raging as the configured Kimi type. The runtime also checks the server-reported type.</td>
+</tr>
+<tr>
+<td>OpportunisticTargeting</td>
+<td>False, True</td>
+<td>Prefer the nearest eligible ordinary target during chase and combat. Rescue remains separate and active casts are not interrupted.</td>
+</tr>
+<tr>
+<td>AttackLastFullSP</td>
+<td>False, True</td>
+<td>Require full SP before proactively choosing monsters configured with the Attack Last tactic.</td>
+</tr>
+<tr>
+<td>DanceMinSP</td>
+<td>Number</td>
+<td>Minimum SP percentage required for dance attacks when dance attacks are enabled.</td>
+</tr>
+<tr>
+<td>AttackTimeLimit</td>
+<td>Number</td>
+<td>Milliseconds allowed before abandoning a target that appears inaccessible or unresponsive. Evidence of successful attacks can refresh the timer.</td>
+</tr>
+<tr>
+<td>LagReduction</td>
+<td>Number</td>
+<td>Reduce command frequency. Higher values can noticeably slow reactions; 0 disables this additional reduction.</td>
+</tr>
+<tr>
+<td>DoNotAttackMoving</td>
+<td>False, True</td>
+<td>If set to true, Kimi will not attack monsters that are currently moving</td>
+</tr>
+<tr>
+<td>LiveMobID</td>
+<td>False, True</td>
+<td>Legacy support for writing observed monster class IDs for a companion AI. This is not required for normal Kimi operation.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="autoskill-options">AutoSkill Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AttackSkillReserveSP</td>
+<td>Number</td>
+<td>To control SP use, you may not want your Kimi to use skills unless there would be enough SP left to recast some sort of buff. Set this value to this minimum SP value to control this.</td>
+</tr>
+<tr>
+<td>AutoMobMode</td>
+<td>Disabled, Aggressive, All</td>
+<td>Controls automatic AoE evaluation, not whether all ordinary targets are selected automatically. Disabled disables that AoE path; Aggressive counts engaged threats; All can count additional eligible nearby monsters. Other skill and tactic gates still apply.</td>
+</tr>
+<tr>
+<td>AutoMobCount</td>
+<td>Number</td>
+<td>Minimum qualifying nearby monster count for the automatic AoE path.</td>
+</tr>
+<tr>
+<td>UseSkillOnly</td>
+<td>Attacking, SkillOnly, Chasing</td>
+<td>Attacking confines skill use to the attack context; Chasing also permits eligible skills while approaching; SkillOnly requests skills instead of ordinary attacks. Other skill gates and combo precedence still apply.</td>
+</tr>
+<tr>
+<td>AutoSkillDelay</td>
+<td>Number</td>
+<td>Extra delay (in milliseconds) added between automatic skill casts. Use 0 to use only cast/spell timing and cooldown windows. Negative values are treated as 0. Actual casts still include the skill's cast time, cooldowns, and SP checks.</td>
+</tr>
+<tr>
+<td>AoEReserveSP</td>
+<td>False, True</td>
+<td>Enable this to not use non-AoE skill attacks unless doing so would leave enough SP to cast Kimi's AoE attack (Illusion of Light).</td>
+</tr>
+<tr>
+<td>AoEFixedLevel</td>
+<td>False, True</td>
+<td>Enable this to ignore skill level tactics when using AoE attacks.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kimi-skills-agile">Kimi Skills - Agile</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IllusionOfClawsLevel</td>
+<td>Number</td>
+<td>Editable level for Illusion of Claw (8009). Enable it separately; valid levels are 1-10.</td>
+</tr>
+<tr>
+<td>IllusionOfClawsEnabled</td>
+<td>False, True</td>
+<td>Enable Illusion of Claw (8009) for Agile Kimi.</td>
+</tr>
+<tr>
+<td>FadeAwayLevel</td>
+<td>Number</td>
+<td>Editable level for Fade Away (8012). Enable it separately; valid level is 1.</td>
+</tr>
+<tr>
+<td>FadeAwayEnabled</td>
+<td>False, True</td>
+<td>Enable Fade Away (8012) for Agile Kimi.</td>
+</tr>
+<tr>
+<td>MirageAssaultLevel</td>
+<td>Number</td>
+<td>Editable level for Mirage Assault (8036). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>MirageAssaultEnabled</td>
+<td>False, True</td>
+<td>Enable Mirage Assault (8036) for Agile Kimi.</td>
+</tr>
+<tr>
+<td>Passive Skills (read-only) (<code>AgilePassiveSkills</code>)</td>
+<td>Read-only</td>
+<td>Read-only list of this type's passive skills and maximum levels. Availability in the catalog does not grant learned passives.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kimi-skills-occult">Kimi Skills - Occult</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IllusionOfBreathLevel</td>
+<td>Number</td>
+<td>Editable level for Illusion of Breath (8024). Enable it separately; valid levels are 1-10.</td>
+</tr>
+<tr>
+<td>IllusionOfBreathEnabled</td>
+<td>False, True</td>
+<td>Enable Illusion of Breath (8024) for Occult Kimi.</td>
+</tr>
+<tr>
+<td>IllusionOfLightLevel</td>
+<td>Number</td>
+<td>Editable level for Illusion of Light (8034). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>IllusionOfLightEnabled</td>
+<td>False, True</td>
+<td>Enable Illusion of Light (8034) for Occult Kimi.</td>
+</tr>
+<tr>
+<td>ChaoticHealLevel</td>
+<td>Number</td>
+<td>Editable level for Chaotic Heal (8014). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>ChaoticHealEnabled</td>
+<td>False, True</td>
+<td>Enable Chaotic Heal (8014) for Occult Kimi.</td>
+</tr>
+<tr>
+<td>ChaoticSanctuaryLevel</td>
+<td>Number</td>
+<td>Editable level for Chaotic Sanctuary (8013), a ground support skill; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>ChaoticSanctuaryEnabled</td>
+<td>False, True</td>
+<td>Enable Chaotic Sanctuary (8013) for Occult Kimi.</td>
+</tr>
+<tr>
+<td>ArcaneOfferingLevel</td>
+<td>Number</td>
+<td>Editable level for Arcane Offering (8015), a self support skill; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>ArcaneOfferingEnabled</td>
+<td>False, True</td>
+<td>Enable Arcane Offering (8015) for Occult Kimi.</td>
+</tr>
+<tr>
+<td>Passive Skills (read-only) (<code>OccultPassiveSkills</code>)</td>
+<td>Read-only</td>
+<td>Read-only list of this type's passive skills and maximum levels. Availability in the catalog does not grant learned passives.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kimi-skills-raging">Kimi Skills - Raging</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IllusionOfCrusherLevel</td>
+<td>Number</td>
+<td>Editable level for Illusion Crusher (8031). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>IllusionOfCrusherEnabled</td>
+<td>False, True</td>
+<td>Enable Illusion Crusher (8031) for Raging Kimi.</td>
+</tr>
+<tr>
+<td>BloodSweepLevel</td>
+<td>Number</td>
+<td>Editable level for Blood Sweep (8032). Enable it separately; valid levels are 1-10.</td>
+</tr>
+<tr>
+<td>BloodSweepEnabled</td>
+<td>False, True</td>
+<td>Enable Blood Sweep (8032) for Raging Kimi.</td>
+</tr>
+<tr>
+<td>Passive Skills (read-only) (<code>RagingPassiveSkills</code>)</td>
+<td>Read-only</td>
+<td>Read-only list of this type's passive skills and maximum levels. Availability in the catalog does not grant learned passives.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kimi-skills-common">Kimi Skills - Common</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BodyDoubleLevel</td>
+<td>Number</td>
+<td>Editable level for Body Double (8022). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>BodyDoubleEnabled</td>
+<td>False, True</td>
+<td>Enable Body Double (8022) for Ward, Occult, Agile, or Raging Kimi.</td>
+</tr>
+<tr>
+<td>QuickDefenseLevel</td>
+<td>Number</td>
+<td>Editable level for Quick Defense (8023). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>QuickDefenseEnabled</td>
+<td>False, True</td>
+<td>Enable Quick Defense (8023) for Ward, Occult, Agile, or Raging Kimi.</td>
+</tr>
+<tr>
+<td>MasterSwapLevel</td>
+<td>Number</td>
+<td>Editable level for Master Swap (8005). This utility targets the owner; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>MasterSwapEnabled</td>
+<td>False, True</td>
+<td>Enable Master Swap (8005) for Ward, Occult, or Agile Kimi.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kimi-skills-ward">Kimi Skills - Ward</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bastion Renewal Level</td>
+<td>Number</td>
+<td>Editable level for Bastion Renewal (8006). Enable it separately; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>Bastion Renewal Enabled</td>
+<td>False, True</td>
+<td>Enable Bastion Renewal (8006) for Ward Kimi.</td>
+</tr>
+<tr>
+<td>WardDomainLevel</td>
+<td>Number</td>
+<td>Editable level for Ward's Domain (8033), a self centered protection aura; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>WardDomainEnabled</td>
+<td>False, True</td>
+<td>Enable Ward's Domain (8033) for Ward Kimi.</td>
+</tr>
+<tr>
+<td>TauntLevel</td>
+<td>Number</td>
+<td>Editable level for Taunt (8021), a self centered area skill; valid levels are 1-5.</td>
+</tr>
+<tr>
+<td>TauntEnabled</td>
+<td>False, True</td>
+<td>Enable Taunt (8021) for Ward Kimi.</td>
+</tr>
+<tr>
+<td>Passive Skills (read-only) (<code>WardPassiveSkills</code>)</td>
+<td>Read-only</td>
+<td>Read-only list of this type's passive skills and maximum levels. Availability in the catalog does not grant learned passives.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kimi-skills">Kimi Skills</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OnlyAOE</td>
+<td>False, True</td>
+<td>Restrict the applicable offensive auto-skill selection to the AoE path. Enable the appropriate AoE skill first. This is not a replacement for configuring explicit combo nodes.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="skill-combo-options">Skill Combo Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ComboEnabled</td>
+<td>False, True</td>
+<td>Enable the regular eight-slot combo. Use ComboRunDuringAttack for the supported attack-driven rotation; this is separate from BlueprintComboEnabled.</td>
+</tr>
+<tr>
+<td>BlueprintComboEnabled</td>
+<td>False, True</td>
+<td>Enable graphs from the Combo Tactics editor. See BLUEPRINT_GUIDE.md for graph execution and limitations.</td>
+</tr>
+<tr>
+<td>ComboRunDuringChase</td>
+<td>False, True</td>
+<td>Legacy chase toggle. The current execution-context guard rejects CHASE_ST for regular combos, so this option does not make the regular sequence cast during chase.</td>
+</tr>
+<tr>
+<td>ComboRunDuringAttack</td>
+<td>False, True</td>
+<td>Run the regular slot sequence while attacking. Enable alongside ComboEnabled to use regular combos.</td>
+</tr>
+<tr>
+<td>ComboRunDuringIdle</td>
+<td>False, True</td>
+<td>Legacy idle-context toggle. The current idle handler does not dispatch the regular slot sequence; use a Blueprint idle trigger for graph-based idle actions.</td>
+</tr>
+<tr>
+<td>ComboResetOnTargetChange</td>
+<td>False, True</td>
+<td>Restart the regular combo at slot 1 when its target changes. Frequent target changes can therefore repeat early slots.</td>
+</tr>
+<tr>
+<td>ComboAutoAttackDelay</td>
+<td>Number</td>
+<td>Delay (ms) after issuing a combo auto-attack before advancing. Counts represent attack commands; continuous attacks may continue while a skill is unavailable.</td>
+</tr>
+<tr>
+<td>Combo Slot 1 (<code>ComboSlot1_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 1 - Combo Count (<code>ComboSlot1_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 2 (<code>ComboSlot2_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 2 - Combo Count (<code>ComboSlot2_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 3 (<code>ComboSlot3_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 3 - Combo Count (<code>ComboSlot3_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 4 (<code>ComboSlot4_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 4 - Combo Count (<code>ComboSlot4_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 5 (<code>ComboSlot5_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 5 - Combo Count (<code>ComboSlot5_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 6 (<code>ComboSlot6_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 6 - Combo Count (<code>ComboSlot6_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 7 (<code>ComboSlot7_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 7 - Combo Count (<code>ComboSlot7_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+<tr>
+<td>Combo Slot 8 (<code>ComboSlot8_SkillID</code>)</td>
+<td>Number</td>
+<td>Skill for this slot. Select an active skill, Auto-Attack (-1), or an empty slot (0). Encountering an empty slot while advancing returns the regular rotation to slot 1.</td>
+</tr>
+<tr>
+<td>Combo Slot 8 - Combo Count (<code>ComboSlot8_ComboCount</code>)</td>
+<td>Number</td>
+<td>Number of commands/casts for this slot before advancing. Zero skips the slot. Counts do not prove successful hits or server-side cast acceptance.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="walkfollow-options">Walk/Follow Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FollowStayBack</td>
+<td>Number</td>
+<td>Your Kimi will stay this many cells behind you when following you.</td>
+</tr>
+<tr>
+<td>RestXOff</td>
+<td>Number</td>
+<td>If set to rest, the Kimi will move this many cells east of you when you sit. Setting this to a negative number will cause the Kimi to move west instead.</td>
+</tr>
+<tr>
+<td>RestYOff</td>
+<td>Number</td>
+<td>If set to rest, the Kimi will move this many cells north of you when you sit. Setting this to a negative number will cause the Kimi to move south instead.</td>
+</tr>
+<tr>
+<td>DoNotUseRest</td>
+<td>False, True</td>
+<td>Set this to false if when you sit down, you want your Kimi to become passive, and, when it becomes idle, will move close to you.</td>
+</tr>
+<tr>
+<td>SpawnDelay</td>
+<td>Number</td>
+<td>Upon spawning, the Kimi will wait for this many miliseconds before taking any actions. This prevents it from wasting its immunity time and also prevents it from KSing after teleporting or changing maps. Setting this value to 1000 (1 second) is a good idea.</td>
+</tr>
+<tr>
+<td>MoveSticky</td>
+<td>False, True</td>
+<td>Set this to true if you want your Kimi to stay put when told to go somewhere.</td>
+</tr>
+<tr>
+<td>MoveStickyFight</td>
+<td>False, True</td>
+<td>Set this to true if you want your Kimi to fight normally if MoveSticky is set to true.</td>
+</tr>
+<tr>
+<td>UseIdleWalk</td>
+<td>None, Circle, Cross, Square, Random, Route_Linear, Route_Circle</td>
+<td>Choose an idle movement pattern. Idle movement also depends on HP/SP and other state checks. Route modes require route data; they are not configured simply by selecting the mode.</td>
+</tr>
+<tr>
+<td>IdleWalkSP</td>
+<td>Number</td>
+<td>Only use IdleWalk when SP is above this, as a %</td>
+</tr>
+<tr>
+<td>UseCastleRoute</td>
+<td>False, True</td>
+<td>Enable this to use castling for route walk. See documentation.</td>
+</tr>
+<tr>
+<td>RelativeRoute</td>
+<td>False, True</td>
+<td>Enable this to use relative routes. See documentation</td>
+</tr>
+<tr>
+<td>IdleWalkDistance</td>
+<td>Number</td>
+<td>When walking while idle, keep this distance from owner.</td>
+</tr>
+<tr>
+<td>ChaseSPPause</td>
+<td>False, True</td>
+<td>Enable this to make the Kimi delay moving to a new target when it is below a specified SP level, AND is expecting an SP-regen tick in the near future. This is an extreme measure to deal with SP problems resulting from the Kimi never staying still long enough to regen any SP (Kimis do not regen sp while moving). WARNING: This will make your Kimi pause after each kill, and this may be undesirable. Use this only if you understand this option. See documentation for details.</td>
+</tr>
+<tr>
+<td>ChaseSPPauseSP</td>
+<td>Number</td>
+<td>When ChaseSPPause is enabled, and SP is below this threshold, the Kimi may pause if near an SP tick.If set to a negative number, this is treated as a percentage. Otherwise, it is simply the number of SP.</td>
+</tr>
+<tr>
+<td>ChaseSPPauseTime</td>
+<td>Number</td>
+<td>Look-ahead window in milliseconds for the AI's predicted SP recovery tick. A larger value can increase movement pauses; actual SP regeneration is server-controlled.</td>
+</tr>
+<tr>
+<td>StationaryMoveBounds</td>
+<td>Number</td>
+<td>This is the farthest from the owner that the Kimi will be allowed to get before dropping all targets and moving back to the owner. This value is used while the owner is NOT moving (see also MobileMoveBounds) To control aggro range of Kimi, use the AggroDist options, not MoveBounds. To set distance from owner that Kimi should return to after killing use FollowStayBack, not MoveBounds.</td>
+</tr>
+<tr>
+<td>MobileMoveBounds</td>
+<td>Number</td>
+<td>This is the farthest from the owner that the Kimi will be allowed to get before dropping all targets and moving back to the owner. This value is used while the owner IS moving (see also StationaryMoveBounds) To control aggro range of Kimi, use the AggroDist options, not MoveBounds. This should probably be lower than StationaryMoveBounds to help keep Kimi from being left behind.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="autobuff-options">Autobuff Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UseAutoHeal</td>
+<td>Never, Always, Idle, Idle_low</td>
+<td>Never disables automatic healing. Always checks healing before ordinary state processing. Idle checks early in idle processing; Idle_low checks later, after targeting/follow decisions. All modes retain HP thresholds, skill-enabled, SP, and cooldown checks. No extra 15-second timer was added.</td>
+</tr>
+<tr>
+<td>ChaoticHealOwnerHP</td>
+<td>Number</td>
+<td>Automatic Heal becomes eligible below this owner HP percentage. At or above the threshold it does not trigger on owner HP. The server selects the actual recipient.</td>
+</tr>
+<tr>
+<td>ChaoticHealKimiHP</td>
+<td>Number</td>
+<td>Automatic Heal becomes eligible below this Kimi HP percentage. At or above the threshold it does not trigger on Kimi HP. The server selects the actual recipient.</td>
+</tr>
+<tr>
+<td>UseAutoBD</td>
+<td>False, True</td>
+<td>Enable automatic Body Double using an HP threshold or timed casting. Requires Body Double Enabled in Skills &amp; Behavior. Available for all four Kimi.</td>
+</tr>
+<tr>
+<td>BodyDoubleOwnerHP</td>
+<td>0-100</td>
+<td>Owner HP percentage that triggers automatic Body Double. At zero, a positive Cast Interval enables timed casting without an HP check. Both zero disables automatic casting.</td>
+</tr>
+<tr>
+<td>Body Double Cast Interval</td>
+<td>0-3600 seconds</td>
+<td>Seconds between Body Double casts. With HP threshold 0, a positive interval enables timed casting. With a positive HP threshold, that HP condition also applies. Body Double has no built-in cooldown; buff duration does not delay recasting. Saved separately for each Kimi.</td>
+</tr>
+<tr>
+<td>Bastion Renewal Cooldown</td>
+<td>0-3600 seconds</td>
+<td>Seconds between Bastion Renewal attempts on Ward. Positive values override the stored 15-second cooldown; 0 uses that default. The server still decides whether each attempt succeeds.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="kiting-options">Kiting Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KiteParanoid</td>
+<td>False, True</td>
+<td>Set this to true if you want your mercenary to kite away frommonsters before being attacked by them</td>
+</tr>
+<tr>
+<td>KiteStep</td>
+<td>Number</td>
+<td>Move this many cells when kiting.</td>
+</tr>
+<tr>
+<td>KiteParanoidStep</td>
+<td>Number</td>
+<td>Move this many cells when kiting from a monster that.has not yet attacked the mercenary.</td>
+</tr>
+<tr>
+<td>KiteThreshold</td>
+<td>Number</td>
+<td>Kite when a monster is within this many cells.</td>
+</tr>
+<tr>
+<td>KiteParanoidThreshold</td>
+<td>Number</td>
+<td>Kite when a monster that has not yet attacked is within this many cells.</td>
+</tr>
+<tr>
+<td>KiteBounds</td>
+<td>Number</td>
+<td>When kiting do not exceed this distance from owner</td>
+</tr>
+<tr>
+<td>ForceKite</td>
+<td>False, True</td>
+<td>Set this to true if you want your Kimi to kite monsters.even if it has no ranged attack. This may result in odd behavior</td>
+</tr>
+<tr>
+<td>FleeHP</td>
+<td>Number</td>
+<td>If non-zero and kiting is enabled, only kite below this percent HP</td>
+</tr>
+</tbody>
+</table>
+<h4 id="friending-options">Friending Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>StandbyFriending</td>
+<td>False, True</td>
+<td>Allow the legacy standby-and-position method of managing friends. This does not automatically make all nearby players friends.</td>
+</tr>
+<tr>
+<td>MirAIFriending</td>
+<td>False, True</td>
+<td>Set this to true if you want the Kimi to emulate MirAI friending.</td>
+</tr>
+<tr>
+<td>FriendAssistDamageHPThresholdOwner</td>
+<td>Number</td>
+<td>The custom hook enables owner damage-assist behavior at or below this HP percentage. Zero stops that threshold-based toggling; the underlying FriendAttack setting still matters. This is separate from Rescue Owner.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="standby-options">Standby Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DefendStandby</td>
+<td>False, True</td>
+<td>Set this to true if you want your Kimi to defend you even while in standby.</td>
+</tr>
+<tr>
+<td>StickyStandby</td>
+<td>Disabled, Enabled, Enabled_Relog</td>
+<td>Disabled clears sticky standby behavior; Enabled returns to standby after temporary actions; the persistence option also stores standby state between sessions.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="berserk-options">Berserk Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UseBerserkMobbed</td>
+<td>Number</td>
+<td>Enable berserk behavior when the number of attackers exceeds this threshold. Zero disables this trigger.</td>
+</tr>
+<tr>
+<td>UseBerserkSkill</td>
+<td>False, True</td>
+<td>Set to true to have your Kimi go berzerk when told to use a skill on a target.</td>
+</tr>
+<tr>
+<td>UseBerserkAttack</td>
+<td>False, True</td>
+<td>Set this to true to have your Kimi go berzerk when told to attack a target.</td>
+</tr>
+<tr>
+<td>Berserk_SkillAlways</td>
+<td>False, True</td>
+<td>Set this to true to ignore skill use limits while in berzerk mode.</td>
+</tr>
+<tr>
+<td>Berserk_Dance</td>
+<td>False, True</td>
+<td>Set this to true if you want your Kimi to use dance attack while in berzerk mode.</td>
+</tr>
+<tr>
+<td>Berserk_IgnoreMinSP</td>
+<td>False, True</td>
+<td>Ignore the normal minimum/reserve SP policy while in berserk mode. Actual skill SP cost and server restrictions still apply.</td>
+</tr>
+<tr>
+<td>Berserk_ComboAlways</td>
+<td>False, True</td>
+<td>Legacy berserk combo policy; it does not enable either the regular combo or Blueprint system.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="pvp-options">PVP Options</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PVPmode</td>
+<td>False, True</td>
+<td>Set this to true if you want to use your Kimi in PVP enabled maps.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="regular-combo-setup">Regular combo setup</h3>
+<p>Regular combos are configured in <strong>Kimi Settings â†’ Skill Combo Options</strong>, not on the node canvas. Enable ComboEnabled and ComboRunDuringAttack. Select a skill and count for each consecutive slot. Keep later unused slots empty. Enable the required skills in the skill categories before applying.</p>
+<p>A simple Occult test sequence is Auto-Attack Ã—1, Illusion of Breath Ã—1, then an empty slot. Once that works, add support skills deliberately. Adding Chaotic Heal also adds its substantial SP requirement; it is not conditional healing merely because automatic healing uses thresholds.</p>
+<p>ComboResetOnTargetChange restarts the sequence on a new target. ComboAutoAttackDelay is a timer between issued attack commands and progression. The runtime also has ComboSkillCastDelay, an internal minimum skill-step delay (500 ms in the clean profile); actual cast time can be longer. It is not a browsable property in the current compiled grid.</p>
+<p>The regular combo's chase and idle controls are inherited: the current chase guard rejects regular combo execution in CHASE_ST, and the idle handler does not dispatch the regular sequence. Use the supported attack context. Blueprint graph triggers are a separate mechanism.</p>
+<h2 id="blueprint-shared">Blueprint (Shared)</h2>
+<p>This is the visual Blueprint editor. It supports graph construction, node properties, connections, and graph persistence. See <a href="BLUEPRINT_GUIDE.md">BLUEPRINT_GUIDE.md</a> for each node, execution rules, examples, and discrepancies between exposed options and runtime support.</p>
+<h2 id="kimi-tactics">Kimi Tactics</h2>
+<p>Kimi tactics select behavior by monster ID. The row with ID 0 is the runtime fallback when no more specific row is available. The list displays each row's Monster Name.</p>
+<h3 id="row-actions">Row actions</h3>
+<ul>
+<li><strong>Add</strong> creates a new row with ID 1 and the default tactic values. A double-click in the tactic list performs the same action.</li>
+<li><strong>Remove</strong> deletes the selected row from the in-memory list. The ID 0 row cannot be removed. Select a different row before changing its ID or name.</li>
+<li><strong>Monster Name</strong> is the display name written as the comment on the tactic line. It may not be empty when validated.</li>
+<li><strong>Monster ID</strong> is the numeric monster/class key. IDs must be unique. ID changes are applied as the text is edited, so finish the edit with a valid unique number.</li>
+</ul>
+<h3 id="overall-tactics-fields">Overall Tactics fields</h3>
+<p><strong>Basic Behavior</strong> controls whether and when this monster can be selected.</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Runtime meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tank - Pull</td>
+<td>Existing Tank behavior: tag a monster to draw attention, then stop attacking once it targets Kimi. Normal following remains available.</td>
+</tr>
+<tr>
+<td>Tank - Gather</td>
+<td>Collect eligible monsters near Kimi, then use enabled skills or the attack combo in place. Ward uses enabled Taunt from its radius when ready; during cooldown, basic hits can tag more targets unless Skill Only is enabled.</td>
+</tr>
+<tr>
+<td>Ignore</td>
+<td>Do not attack the monster.</td>
+</tr>
+<tr>
+<td>Attack (low)</td>
+<td>Seek and attack at low priority. It does not take a higher priority while already attacking.</td>
+</tr>
+<tr>
+<td>Attack (medium)</td>
+<td>Seek and attack at medium priority.</td>
+</tr>
+<tr>
+<td>Attack (high)</td>
+<td>Seek and attack at high priority.</td>
+</tr>
+<tr>
+<td>React (low)</td>
+<td>React when the self, owner, or a friend is attacked, at low priority.</td>
+</tr>
+<tr>
+<td>React (medium)</td>
+<td>React when the self, owner, or a friend is attacked, at medium priority.</td>
+</tr>
+<tr>
+<td>React (high)</td>
+<td>React when the self, owner, or a friend is attacked, at high priority.</td>
+</tr>
+<tr>
+<td>React (self)</td>
+<td>React only when the Kimi itself is attacked.</td>
+</tr>
+<tr>
+<td>Snipe (low)</td>
+<td>Attempt a one-shot bolt attack while another monster is being attacked, at low priority.</td>
+</tr>
+<tr>
+<td>Snipe (medium)</td>
+<td>The same snipe attempt at medium priority.</td>
+</tr>
+<tr>
+<td>Snipe (high)</td>
+<td>The same snipe attempt at high priority.</td>
+</tr>
+<tr>
+<td>Attack (low) React (medium)</td>
+<td>Treat the monster as low-priority attack work normally, then use medium reaction priority when it is actively attacking.</td>
+</tr>
+<tr>
+<td>Attack (last)</td>
+<td>Use the runtime's special last-attack priority. The runtime may require full SP when the global AttackLastFullSP setting is enabled.</td>
+</tr>
+<tr>
+<td>Attack (top)</td>
+<td>Use the runtime's top attack priority.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Use Attack Skills</strong> determines how many configured attack skills may be used for this target.</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Value written and meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Always</td>
+<td>SKILL_ALWAYS (100): continue using eligible attack skills.</td>
+</tr>
+<tr>
+<td>Never</td>
+<td>SKILL_NEVER (0): do not use attack skills for this target.</td>
+</tr>
+<tr>
+<td>This many times:</td>
+<td>A nonnegative count, from 0 through 100 in the control.</td>
+</tr>
+<tr>
+<td>Once; level:</td>
+<td>A negative value. The entered level 1 through 5 is written as -1 through -5; the runtime interprets its absolute value as the skill level for the one cast.</td>
+</tr>
+</tbody>
+</table>
+<p>The numeric field is disabled for Always and Never. A numeric value of 100 in the count mode has the same runtime value as Always.</p>
+<p><strong>Kiting</strong> has three choices:</p>
+<ul>
+<li><strong>Never</strong> never kite this monster.</li>
+<li><strong>React</strong> kites only when the monster is actually attacking the self, owner, or a friend.</li>
+<li><strong>Always</strong> kites whenever the runtime's distance and threshold checks require it.</li>
+</ul>
+<p>Kiting requires KiteMonsters = 1. For Breath and Light, standard combos, Blueprint skill nodes, and automatic attacks use positioning bounded by the skill casting range. Kite Never disables tactical retreat; Kite React requires an enemy targeting Kimi, its owner, or a friend. Snipe OK independently requests ranged casting distance. Melee and normal attack steps retain their own attack range.</p>
+<p><strong>Skill Class</strong> selects which kind of attack skill the runtime may use.</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Skill class</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Any skill</td>
+<td>Main and Homun S attack classes.</td>
+</tr>
+<tr>
+<td>Non-Homun S skills</td>
+<td>Main or pre-S/old skills.</td>
+</tr>
+<tr>
+<td>Homun S skills</td>
+<td>Homun S skills.</td>
+</tr>
+<tr>
+<td>AoE attacks</td>
+<td>Mob/AoE attacks.</td>
+</tr>
+<tr>
+<td>Combo (first skill)</td>
+<td>The first-skill combo class.</td>
+</tr>
+<tr>
+<td>Combo (full combos)</td>
+<td>The full-combo class.</td>
+</tr>
+<tr>
+<td>Summon minions</td>
+<td>Minion-summoning skills.</td>
+</tr>
+<tr>
+<td>Grapple (Tinder Breaker)</td>
+<td>Tinder Breaker grapple class.</td>
+</tr>
+<tr>
+<td>Grapple (CBC)</td>
+<td>CBC grapple class.</td>
+</tr>
+<tr>
+<td>Grapple (EQC)</td>
+<td>EQC grapple class.</td>
+</tr>
+<tr>
+<td>Minions + Pre-S skill</td>
+<td>Minion plus pre-S/old skill class.</td>
+</tr>
+<tr>
+<td>Minions + Homun S</td>
+<td>Minion plus Homun S skill class.</td>
+</tr>
+</tbody>
+</table>
+<p>The class is a filter for the skills returned by the runtime. It does not create a skill or make a missing skill available.</p>
+<p><strong>Combos and tactics:</strong> A combo supplies the action order; the target's tactics still control offensive skill permission, cast count, skill class, and SP reserve. Never or an incompatible class skips that offensive step. A temporary SP reserve shortage waits on the step. Once uses one offensive cast at no more than the specified level; numbered limits count offensive combo casts against the current target across combo repeats. Support healing and buffs do not consume that offensive allowance. AoE attacks permits AoE skills; legacy classes without a matching Kimi skill do not gain one by enabling a combo. Rescue may change the target, and the configured combo target-change behavior still applies.</p>
+<p><strong>Rescue</strong> controls which configured target a monster may be pulled away from when the AI enters rescue handling.</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Runtime target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Never</td>
+<td>No rescue from this row.</td>
+</tr>
+<tr>
+<td>Friends</td>
+<td>A target classified as FRIEND.</td>
+</tr>
+<tr>
+<td>Owner's merc</td>
+<td>A target classified as RETAINER.</td>
+</tr>
+<tr>
+<td>Self (homunculus)</td>
+<td>The Kimi itself.</td>
+</tr>
+<tr>
+<td>Owner</td>
+<td>The owner.</td>
+</tr>
+<tr>
+<td>All of the above</td>
+<td>Friend, retainer, owner, and other friend/self targets accepted by the runtime; the self is excluded by the final all-target check.</td>
+</tr>
+</tbody>
+</table>
+<p>A separate RescueOwnerLowHP setting is checked before this row. A positive value forces owner rescue below that HP percentage; the row may still allow rescue above it. For threshold-only rescue, select Rescue = Owner and set RescueOwnerLowHP to the negative threshold (for example, -80 suppresses owner rescue above 80% HP). Zero leaves rescue to the row. Follow state blocks rescue. The AI relies on the attacker target reported by the client; an HP drop alone does not identify the attacker.</p>
+<p><strong>SP</strong> is the reserve used while selecting attack skills. The control accepts -1 through 1000. -1 means use the global AttackSkillReserveSP value; a nonnegative value reserves that many SP for this target.</p>
+<p><strong>Weight</strong> is a decimal from 0.0 through 20.0 in 0.1 steps. The runtime multiplies mob counts and area-target position weights by this value. A weight of 0 removes the monster from those weighted counts, although the Basic Behavior check still sees its nonzero tactic.</p>
+<p><strong>Kill-steal</strong> controls the target ownership check:</p>
+<ul>
+<li><strong>Never</strong> uses the normal anti-kill-steal checks.</li>
+<li><strong>Always</strong> treats the monster as free to attack.</li>
+<li><strong>Polite</strong> keeps the normal checks and also declines moving targets.</li>
+</ul>
+<p><strong>Chase</strong> controls movement toward this target:</p>
+<ul>
+<li><strong>Normal</strong> follows the global DoNotChase setting.</li>
+<li><strong>Always</strong> chases regardless of the global no-chase setting and does not pause for the low-SP chase check.</li>
+<li><strong>Never</strong> returns the no-chase result.</li>
+<li><strong>Pause for SP</strong> follows normal chase behavior until the runtime's low-SP pause condition is met, then pauses.</li>
+</ul>
+<p><strong>Snipe OK</strong> keeps Illusion of Breath and Illusion of Light near their maximum casting range on the current target, including during standard and Blueprint combos. Positioning aims for the outer one-cell band of the skill range, within owner movement bounds. It does not insert a skill against another target. Clearing it disables this distance preference; enabled tactical kiting may still reposition Kimi. A normal attack or melee combo step closes to its own required range.</p>
+<p>If a ranged retreat makes no positional progress for 500 ms while the target remains in casting range, Kimi stops repeating that retreat and allows casting from its current position. Positioning is reconsidered when either actor moves. This movement check does not add a skill cooldown; normal skill readiness and tactic restrictions still apply. It does not allow casting at an out-of-range target.</p>
+<p><strong>React</strong> controls reactions to a monster's cast:</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Runtime meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No</td>
+<td>Passive cast handling.</td>
+</tr>
+<tr>
+<td>React to casts</td>
+<td>Generic cast reaction.</td>
+</tr>
+<tr>
+<td>React w/Any</td>
+<td>React with any eligible targeted skill.</td>
+</tr>
+<tr>
+<td>React w/Breeze</td>
+<td>React with Silent Breeze.</td>
+</tr>
+<tr>
+<td>React w/Old</td>
+<td>React with a main/old (pre-S) skill.</td>
+</tr>
+<tr>
+<td>React w/S</td>
+<td>React with a Homun S skill.</td>
+</tr>
+<tr>
+<td>React w/Mob</td>
+<td>React with a mob/AoE skill.</td>
+</tr>
+<tr>
+<td>React w/Debuff</td>
+<td>React with a debuff skill class.</td>
+</tr>
+<tr>
+<td>React w/Minions</td>
+<td>React with a minion skill class.</td>
+</tr>
+</tbody>
+</table>
+<p>React to casts makes an actually casting target eligible for cast reaction. Specialized reactions now enter the numeric skill-command state correctly and remain blocked during Follow state. React w/Any is the generic mode that selects the first eligible skill from the current targeted-skill list. The current cast-reaction loop does not match the category codes returned by GetTargetedSkills for the Old, S, Mob, Debuff, or Minions choices, and the returned list has no exact Breeze skill entry. Those specialized choices are therefore serialized but do not select their named skill class in this build.</p>
+<p><strong>Debuff</strong> and <strong>While</strong> are intended to select an automatic debuff during chasing or attacking. The visible Debuff choices are <strong>Never</strong>, <strong>Any</strong>, <strong>Silent Breeze</strong>, and <strong>Volcanic Ash</strong>; While is <strong>Chasing</strong> or <strong>Attacking</strong>.</p>
+<p>The current Kimi editor has a mapping defect in this pair. Chasing combinations map to Never, Any, Silent Breeze, and Volcanic Ash as expected. For Attacking, the getter maps Never to the chasing Ash value, Any to automatic attacking debuff, Silent Breeze to attacking Breeze, and Volcanic Ash to the chasing Ash value. Use a manual H_Tactics.lua edit when an exact DEBUFF_ASH_A or other exact attacking value is required.</p>
+<p>The current runtime also returns only main, Homun S, and mob entries from GetTargetedSkills. No DEBUFF_ATK entry reaches the auto-skill selectors in this build, so this setting is serialized but does not by itself produce an automatic debuff cast.</p>
+<p>The Kimi tab does not display Use Pushback. H_Tactics.lua still stores a pushback slot for file compatibility, but the current AI runtime has no TACT_PUSHBACK handling, so changing that slot manually has no effect in this build.</p>
+<h2 id="pvp-tactics">PVP Tactics</h2>
+<p>PVP tactics are used for player-target lookups when PVPmode is nonzero. Monster targets continue to use Kimi tactics. The PVP list displays each row's key rather than a name.</p>
+<h3 id="target-rows-and-actions">Target rows and actions</h3>
+<p>The <strong>Player ID or Friend Class</strong> field accepts an exact player ID or one of the classification keys below.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>How the runtime uses it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Default PVP row when no more specific row supplies a value.</td>
+</tr>
+<tr>
+<td>Exact player ID</td>
+<td>Takes precedence for that player.</td>
+</tr>
+<tr>
+<td>KOS</td>
+<td>Kill-on-sight classification.</td>
+</tr>
+<tr>
+<td>ENEMY</td>
+<td>Hostile classification.</td>
+</tr>
+<tr>
+<td>NEUTRAL</td>
+<td>Neutral classification.</td>
+</tr>
+<tr>
+<td>FRIEND</td>
+<td>Friend classification.</td>
+</tr>
+<tr>
+<td>ALLY</td>
+<td>Friendly classification.</td>
+</tr>
+<tr>
+<td>RETAINER</td>
+<td>Mercenary/retainer classification.</td>
+</tr>
+</tbody>
+</table>
+<p>For a player target, the runtime first checks an exact player-ID row, then the friend classification. For a hostile target on a Kimi, it can use a Kimi class row. Missing fields fall back to row 0. The classifications are keys; Basic Behavior still determines the action.</p>
+<ul>
+<li><strong>Add</strong> creates a row with the temporary key &quot;new&quot;. A double-click in the list does the same.</li>
+<li><strong>Remove</strong> removes the selected row from the in-memory list. The row with key 0 cannot be removed.</li>
+<li>A new row's key must be changed to a nonempty unique ID or classification key before validation.</li>
+</ul>
+<h3 id="overall-tactics-fields-1">Overall Tactics fields</h3>
+<p><strong>Basic Behavior</strong> has the same fifteen choices and runtime meanings as Kimi Tactics: <strong>Tank</strong>, <strong>Ignore</strong>, <strong>Attack (low)</strong>, <strong>Attack (medium)</strong>, <strong>Attack (high)</strong>, <strong>React (low)</strong>, <strong>React (medium)</strong>, <strong>React (high)</strong>, <strong>React (self)</strong>, <strong>Snipe (low)</strong>, <strong>Snipe (medium)</strong>, <strong>Snipe (high)</strong>, <strong>Attack (low) React (med)</strong>, <strong>Attack (last)</strong>, and <strong>Attack (top)</strong>. The PVP label uses the shorter “React (med)” wording for the combined choice.</p>
+<p><strong>React</strong> has the same cast-reaction choices as Kimi: <strong>No</strong>, <strong>React to casts</strong>, <strong>React w/Any</strong>, <strong>React w/Breeze</strong>, <strong>React w/Old</strong>, <strong>React w/S</strong>, <strong>React w/Mob</strong>, <strong>React w/Debuff</strong>, and <strong>React w/Minions</strong>. Their intended meanings are the same cast classes described above. In the current runtime, React w/Any is the generic mode that can select the first eligible targeted skill; the named Old, S, Mob, Debuff, Minions, and Breeze specializations do not match a skill in the current cast-reaction list.</p>
+<p><strong>Use Attack Skills</strong> has <strong>Always</strong>, <strong>Never</strong>, <strong>This many times:</strong>, and <strong>Once; level:</strong>. Always writes SKILL_ALWAYS, Never writes SKILL_NEVER, a count writes a nonnegative number, and Once; level: writes the negative of the entered level. The PVP control's once-level numeric field is currently configured from 1 through 99, even though the runtime uses the value as an absolute skill level and the skill itself supplies the practical maximum. Imported negative once-level values are assigned directly to this positive-range control and are not a reliable import path.</p>
+<p><strong>Kiting</strong> has <strong>Never</strong>, <strong>React</strong>, and <strong>Always</strong>, with the same row meanings as Kimi. It still requires global KiteMonsters = 1.</p>
+<p><strong>Use Debuffs</strong> displays <strong>Never</strong>, <strong>Any</strong>, <strong>Silent Breeze</strong>, and <strong>Volcanic Ash</strong>, with <strong>Chasing</strong> or <strong>Attacking</strong> beside it. The intended meanings are the same as Kimi, but the PVP editor currently uses a two-item multiplier for a four-item primary list. After selecting Attacking, the visible labels serialize as Never = DEBUFF_BREEZE_C, Any = DEBUFF_ASH_C, Silent Breeze = DEBUFF_ANY_A, and Volcanic Ash = DEBUFF_BREEZE_A. Changing While alone has no change handler. The editor cannot reliably author the exact attacking Ash value; edit H_PVP_Tact.lua manually when exact debuff constants are needed. As with Kimi, the current GetTargetedSkills result contains no debuff entry, so this setting does not by itself produce an automatic debuff cast.</p>
+<p><strong>Use Pushback</strong> contains <strong>Never</strong>, <strong>Off self</strong>, and <strong>Off self + friend</strong>, corresponding to no pushback, pushing the self clear, or pushing the self and a friend clear. Both the label and combo box are hidden in the current PVP tab, so these choices cannot be changed there. The current AI runtime has no TACT_PUSHBACK handling, so file values do not produce a pushback action in this build.</p>
+<p><strong>Rescue</strong> displays <strong>Never</strong>, <strong>Rescue All</strong>, and <strong>Rescue Retainer</strong>. In the current control, Never writes RESCUE_NEVER, Rescue All writes RESCUE_FRIEND (only the FRIEND classification), and Rescue Retainer writes RESCUE_RETAINER. Self, Owner, and RESCUE_ALL values are not selectable in this three-item list. Use H_PVP_Tact.lua for an exact rescue constant.</p>
+<p><strong>Skill Class</strong> is displayed as:</p>
+<p><strong>Any Attack</strong>, <strong>Old Homun</strong>, <strong>Homun S</strong>, <strong>Combo (once)</strong>, <strong>Combo (full)</strong>, <strong>Summon Minions</strong>, <strong>Grapple (Tinder Breaker)</strong>, <strong>Grapple (CBC)</strong>, <strong>Grapple (EQC)</strong>, <strong>Minion+PreS Skills</strong>, and <strong>Minion+Homun S Skills</strong>.</p>
+<p>The current getter has twelve enum cases but the list has only eleven entries. The actual values written by the visible entries are:</p>
+<table>
+<thead>
+<tr>
+<th>Visible label</th>
+<th>Value written by the current getter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Any Attack</td>
+<td>CLASS_BOTH</td>
+</tr>
+<tr>
+<td>Old Homun</td>
+<td>CLASS_OLD</td>
+</tr>
+<tr>
+<td>Homun S</td>
+<td>CLASS_S</td>
+</tr>
+<tr>
+<td>Combo (once)</td>
+<td>CLASS_MOB</td>
+</tr>
+<tr>
+<td>Combo (full)</td>
+<td>CLASS_COMBO_1</td>
+</tr>
+<tr>
+<td>Summon Minions</td>
+<td>CLASS_COMBO_2</td>
+</tr>
+<tr>
+<td>Grapple (Tinder Breaker)</td>
+<td>CLASS_MINION</td>
+</tr>
+<tr>
+<td>Grapple (CBC)</td>
+<td>CLASS_GRAPPLE</td>
+</tr>
+<tr>
+<td>Grapple (EQC)</td>
+<td>CLASS_GRAPPLE_1</td>
+</tr>
+<tr>
+<td>Minion+PreS Skills</td>
+<td>CLASS_GRAPPLE_2</td>
+</tr>
+<tr>
+<td>Minion+Homun S Skills</td>
+<td>CLASS_MIN_OLD</td>
+</tr>
+</tbody>
+</table>
+<p>CLASS_MIN_S has no visible PVP option. The labels from Combo (once) onward therefore do not match the enum values they appear to name; use manual H_PVP_Tact.lua editing for a specific class.</p>
+<p>PVP rows contain no controls or fields for SP reserve, Weight, Kill-steal, Chase, or Snipe OK. A lookup for one of those missing fields falls through to PVP row 0 and then returns 0 when that field is absent. The Basic Behavior snipe labels are still visible, but the ranged monster positioning implemented here does not apply to PVP targets.</p>
+<h2 id="extra-options">Extra Options</h2>
+<p>The tab contains one disabled selector showing <strong>Kimi</strong>, a multiline vertical-scroll editor, and the note “Edit Kimi skill levels and custom options not supported by the GUI.” The editor displays the contents of H_Extra.lua as plain text. It does not parse or validate Lua.</p>
+<p>The shipped H_Extra.lua contains these user-editable areas:</p>
+<ul>
+<li><strong>Logging:</strong> COMBO_INIT, COMBO_ADVANCE, COMBO_AUTO_ATTACK, COMBO_CAST, COMBO_SP, COMBO_COOLDOWN, COMBO_ERROR, COMBO_RESET, ATTACK_ST, BP_COMBO, AAI_SKILLFAIL, AAI_CostSP, AAI_MOBCOUNT, AAI_ERROR, AAI_DEBUG, AAI_TACTICS, AAI_KITING, AAI_TARGETING, AAI_AVOIDANCE, AAI_TIMING, and AAI_STATE. Each LogEnable entry is 1 to enable or 0 to disable. Logs are written under USER_AI/ErrorLog as AAI_*.log. The shipped file enables the combo, general, and state entries listed with 1 and leaves tactical and timing entries listed with 0.</li>
+<li><strong>OnInit:</strong> a hook called once during AI initialization. The shipped function logs key configuration flags.</li>
+<li><strong>GetMyTact:</strong> a commented example hook for returning a dynamic tactic table. It is not active unless uncommented and customized.</li>
+<li><strong>Skill levels:</strong> H_Extra.lua only points to H_SkillList.lua for Kimi skill levels; the Extra tab does not edit skill levels.</li>
+<li><strong>Kimi type constants:</strong> comments identifying WARD (1), OCCULT (2), AGILE (3), and RAGING (4). These comments are reference only.</li>
+<li><strong>Blueprint combo loading:</strong> when BlueprintComboEnabled is 1, the file tries the configured exported combo path under ConfigPath/data and logs whether it loaded. When it is 0, it logs that blueprint combos are disabled.</li>
+<li><strong>FriendAttack:</strong> MOTION_ATTACK, MOTION_ATTACK2, MOTION_SKILL, MOTION_CASTING, MOTION_DAMAGE, MOTION_TOSS, MOTION_BIGTOSS, and MOTION_FULLBLAST. Each entry is 1 to assist on that owner/friend motion or 0 to ignore it. The shipped file enables MOTION_DAMAGE only.</li>
+<li><strong>FriendAssistDamageHPThresholdOwner:</strong> an owner HP percentage gate for MOTION_DAMAGE. A positive value toggles damage assistance at or below that percentage; 0 disables the gate. The shipped default is 50.</li>
+<li><strong>Helper functions:</strong> GetNearbyMobs and GetNearbyMobCount return nearby monster data for custom Lua. OnAttackStart runs when entering ATTACK_ST. OnAImiddle runs each AI cycle. OnAutoBuffs returns 1 in the shipped file so normal state processing continues. OnFailUnknownMode is an empty hook for custom handling.</li>
+</ul>
+<h3 id="extra-options-persistence">Extra Options persistence</h3>
+<p>ExtraControl.Save and ExtraControl.Save(string) are no-ops. Apply Settings, the save-on-quit Yes path, and the Extra control itself do not write edited text back to H_Extra.lua. The text edit still marks the form as changed, so the user can see Apply enabled even though applying cannot persist it. Edit H_Extra.lua manually and restart the GUI to load the saved text.</p>
+<h2 id="main-window-actions-and-menus">Main window actions and menus</h2>
+<p>The main window has nine tabs: <strong>Kimi Settings</strong>, <strong>Ward</strong>, <strong>Occult</strong>, <strong>Agile</strong>, <strong>Raging</strong>, <strong>Kimi Tactics</strong>, <strong>Blueprint (Shared)</strong>, <strong>PVP Tactics</strong>, and <strong>Extra Options</strong>. Each named Kimi tab contains its standard Combo page. The buttons and menu actions are:</p>
+<table>
+<thead>
+<tr>
+<th>Menu or control</th>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>File &gt; Import &gt; Kimi Settings...</td>
+<td>—</td>
+<td>Loads a saved Lua settings file into the Kimi Settings grid. Review the values, then click Apply to activate them in this client.</td>
+</tr>
+<tr>
+<td>File &gt; Import &gt; Kimi Tactics...</td>
+<td>—</td>
+<td>Opens a Lua file and loads its Kimi tactic rows.</td>
+</tr>
+<tr>
+<td>File &gt; Export &gt; Kimi Settings...</td>
+<td>—</td>
+<td>Saves the current Kimi settings to a named Lua file for later import. This does not activate the exported file. Tactics and Blueprint files are saved separately using their own controls.</td>
+</tr>
+<tr>
+<td>File &gt; Export &gt; Kimi Tactics...</td>
+<td>—</td>
+<td>Writes the current Kimi tactic collection to a selected Lua file.</td>
+</tr>
+<tr>
+<td>File &gt; Exit</td>
+<td>—</td>
+<td>Closes the window. If changes are marked dirty, it asks whether to save.</td>
+</tr>
+<tr>
+<td>Edit &gt; Apply Settings</td>
+<td>Ctrl+S</td>
+<td>Runs the full save path for settings, Kimi tactics, combo settings, PVP tactics, and skill list. Extra Options is included in the call but its Save method is a no-op.</td>
+</tr>
+<tr>
+<td>Edit &gt; Revert</td>
+<td>Ctrl+R</td>
+<td>Reloads shared settings and per-Kimi automatic and standard combo profiles from H_Config.lua. It does not reload tactics or the Blueprint graph.</td>
+</tr>
+<tr>
+<td>Edit &gt; Reset to Defaults</td>
+<td>Ctrl+D</td>
+<td>Resets shared settings and per-Kimi profiles in the editor. Apply is still required to save.</td>
+</tr>
+<tr>
+<td>Help &gt; Documentation</td>
+<td>F1</td>
+<td>Opens Documentation.html when present, otherwise Documentation.pdf. If neither file exists, it shows an error.</td>
+</tr>
+<tr>
+<td>Help &gt; About...</td>
+<td>—</td>
+<td>Shows the Kimi AI Config version, Azzy AI credit, Kimi conversion credit, copyright, server, and Kimi-only support text.</td>
+</tr>
+<tr>
+<td>Apply Settings button</td>
+<td>—</td>
+<td>Same action as Edit &gt; Apply Settings.</td>
+</tr>
+<tr>
+<td>Quit button</td>
+<td>—</td>
+<td>Same close-and-save prompt as File &gt; Exit.</td>
+</tr>
+</tbody>
+</table>
+<p>The top-level menus use Alt+F for File, Alt+E for Edit, and Alt+H for Help.</p>
+<p>Kimi Tactics and Kimi Settings are the only import/export targets exposed by File. There are no PVP, Combo, or Extra import/export menu items.</p>
+<p>The save prompt has Yes, No, and Cancel buttons, but the current quit handler closes the form after the prompt branch as well. Selecting Cancel therefore closes the window without saving instead of keeping it open.</p>
+<p>PVP_Tact.Save updates or appends rows in H_PVP_Tact.lua but does not remove old rows that are no longer in the editor list. Removing a PVP row can therefore leave its old line in the file. The Kimi and PVP tactic loaders append to their static in-memory collections; repeated imports in one GUI session can show duplicate rows.</p>
+<h2 id="kimi-specific-tabs">Kimi-specific tabs</h2>
+<p>Kimi Settings contains the shared behavior settings, including movement, targeting, and general behavior. Ward, Occult, Agile, and Raging have separate colored tabs for their skills and related behavior options. Opening a tab changes only the editor view; it does not select a different active Kimi.</p>
+<p>Each Kimi has its own standard combo profile. Existing standard combo settings belong to the configured Kimi when an older configuration is first opened. Review the appropriate Kimi tab before enabling a new combo. Skills shared by multiple Kimi retain their shared settings where indicated.</p>
+<p>The character portraits use the supplied game screenshots. Ward now uses the supplied Ward screenshot.
+The Blueprint editor remains shared and is labeled Blueprint (Shared). The independent profiles in each Kimi's Combo page control the standard slot-based combo system.</p>
+<p>Each Kimi tab now includes Automatic Skills. These options are saved independently for each Kimi and are removed from the shared Kimi Settings grid. Healing options appear only for Occult. Shared Blueprints can branch using a Kimi Type condition (Ward 1, Occult 2, Agile 3, Raging 4).</p>
+<h2 id="ward-healing-and-the-30-cell-boundary">Ward healing and the 30-cell boundary</h2>
+<p>In Ward &gt; Skills &amp; Behavior, enable Bastion Renewal and select its learned level. In Automatic Skills, choose UseAutoHeal (Always, Idle, or Idle_low), and set Bastion Renewal HP Threshold. Never disables automatic healing. The default threshold is 100%; automatic healing stops at or above the threshold. Bastion uses Bastion Renewal Cooldown directly when positive; 0 uses the stored 15-second cooldown. A zero HP threshold disables automatic Bastion healing. Legacy UseWarmDef and WarmDefCooldown values remain compatible saved fields but no longer control automatic Bastion casting. Explicit combo casts retain their own sequence and do not use this automatic HP threshold. Bastion keeps skill ID 8006 and compatible WarmDef setting keys.</p>
+<p>StationaryAggroDist and MobileAggroDist control target detection distance from the owner. StationaryMoveBounds and MobileMoveBounds control the movement leash. All four accept up to 30 cells; KiteBounds also accepts 30. Use matching values for a full 30-cell area. FollowStayBack controls how close Kimi returns, not its fighting range. After a target dies or disappears, Kimi returns to the owner if no eligible target is found, before starting idle walking.</p>
+<p>Enable OpportunisticTargeting for nearest eligible ordinary targets. DoNotChase must be 0, and the monster tactic must permit chasing and the intended attacks. Rescue and owner/friend assistance retain their separate handling. These settings do not increase a skill's casting range.</p>
+<p>The AI no longer rejects movement solely because the destination exceeds the old 14-cell owner limit. Long travel uses short movement requests. The client still supplies visible actors and performs pathfinding: 30 is an AI boundary, not a guarantee of 30-cell visibility or a route around every wall. A detected monster behind a wall may remain unreachable.</p>
+<p>The included Ward-30-cell-settings.lua can be loaded with File &gt; Import &gt; Kimi Settings, reviewed, then applied. It selects Ward, enables level-1 Bastion with Always healing below 100% HP and no extra interval, enables opportunistic targeting, disables idle walking, and sets the five distance controls to 30. Review skill levels and other preserved profiles before applying it. On this build, OldHomunType 1 is Ward; 3 is Agile.</p>
+<p>UseAutoBD replaces the old Use Body Double automatic toggle. Existing files retain their previous value when imported. Body Double Enabled controls whether the skill can be used; UseAutoBD controls automatic HP-based or timed casting. Automatic checks run during combat and idle states independently of offensive buff mode. Zero owner HP threshold uses timed casting when Body Double Cast Interval is positive; both zero disables automatic casting. Cooldown settings apply to automatic, combo, and manual requests; explicit casts do not require the automatic HP threshold. Master Swap is enabled through Skills &amp; Behavior. Ward, Occult, and Agile expose MasterSwapOwnerHP and MasterSwapCooldown under Automatic Skills. A zero threshold disables automatic swapping; a positive threshold casts at or below that owner HP percentage, subject to skill availability and cooldown. UseMasterSwap is no longer a second enable gate.</p>
+<h2 id="detours-during-blocked-combat-movement">Detours during blocked combat movement</h2>
+<p>Before the normal chase give-up or attack-timeout fallback, Kimi can try sideways waypoints on either side of the approach line, at offsets of 2, 4, 6, and 8 cells. The fallback allows at most eight candidates within a ten-second attempt window. Each issued waypoint gets up to one second for movement before trying another. Reaching a waypoint resumes normal target approach.</p>
+<p>Waypoints must remain within the configured owner movement boundary (maximum 30), avoid known occupied cells, and obey the monster's Chase setting. Lost, dead, or disallowed targets cancel the detour. If no candidate works, normal unreachable-target handling resumes. This is a limited movement fallback; the AI has no full map-wall grid and cannot guarantee a route around long walls, enclosed areas, or obstacles requiring travel outside the leash. The client must still execute each movement request. In-game terrain testing is required.</p>
+<h3 id="returning-to-the-owner-and-100-cell-limits">Returning to the owner and 100-cell limits</h3>
+<p>Detection distances, movement bounds, and kite bounds support up to 100 cells. These limits do not increase skill casting range or the client's actor visibility. Off-screen combat is possible only while the client continues to report the target; terrain data cannot locate unseen monsters.</p>
+<p>With the correct map selected, normal movement uses terrain routing. Following and emergency return choose a reachable tile near the owner instead of a potentially blocked geometric destination. Return recovery can include Kimi's position outside the combat leash when the owner has moved away. No teleport command is added.</p>
+<p>Navigation uses bounded A* searches and rejects exact destinations inside walls without searching. An unchanged failed route is cached briefly. Especially complex routes can exceed the search budget; this protects the game from a long synchronous AI calculation.</p>
+<h2 id="optional-debug-logging">Optional debug logging</h2>
+<p>Use <strong>Kimi Settings &gt; Debugging &gt; Enable Debug Logging</strong>. <strong>False</strong> (the default) disables recurring trace and category log writes. Set <strong>True</strong> when collecting logs for troubleshooting; existing category settings then control category output. Click Apply and reload the AI after changing it. Normal game error dialogs and the startup status report remain available. Existing logs are retained.</p>
+<p>With OpportunisticTargeting enabled, nearest eligible target selection runs before terrain routing, including when a skill is selected. It does not reset movement when the same target remains nearest. Nearest means distance from Kimi among eligible candidates; known unreachable targets are deprioritized. It is not a comparison of complete walking-route lengths. Active casts and rescue priorities remain protected. Long terrain searches are continued across AI updates to limit per-update work.</p>
+<h3 id="manual-skills-with-combos-enabled">Manual skills with combos enabled</h3>
+<p>An explicit skill command takes priority over automated combos and target switching, subject to the skill validity, casting, spawn, and movement-bound checks. Temporarily rejected casts are retried within the command retry limit. A manual command does not enable the skill or bypass SP requirements. Offensive automatic skill selection remains suppressed during an active combo; include Blood Sweep as a combo step when it should be part of that sequence.</p>
+<p>Owner return uses walkability, not just straight-line distance or sight. A nearby owner across a gap is not considered reached. Return searches may go beyond combat movement bounds to get home; the selected map and bounded search workload still apply. An unfinished return search finishes toward its saved owner position before replanning toward the latest position.</p>
+<h3 id="troubleshooting-bastion-automatic-healing">Troubleshooting Bastion automatic healing</h3>
+<p>If Ward remains below the Bastion Renewal HP Threshold with Auto Heal set to Always and Bastion enabled, temporarily enable Debug Logging. Messages beginning <code>Bastion auto-heal:</code> identify skill delays, reuse waits, disabled skills, insufficient SP, or cast requests. These messages are limited to one every five seconds. A cast request means the AI issued the request; it does not confirm server acceptance. Disable logging after testing. Lag Reduction now sends an automatically queued heal before the AI ends that update.</p>
+<h3 id="shared-support-and-aoe-controls">Shared support and AoE controls</h3>
+<p>Chaotic Heal uses its skill Enabled switch, UseAutoHeal timing mode, and its HP thresholds. The redundant UseChaoticHeal switch is hidden and no longer blocks healing. Zero disables the corresponding HP trigger.</p>
+<p>OnlyAOE is available for Ward, Occult, and Raging. Automatic offensive selection uses Taunt, Illusion of Light, or Blood Sweep respectively. Offensive combo steps must be AoE skills; support steps retain their own rules. This setting does not disable basic attacks; UseSkillOnly controls those. Agile does not expose OnlyAOE because its current catalog has no active AoE skill.</p>
+<h3 id="tank-gather">Tank – Gather</h3>
+<p>Choose Tank - Gather in Kimi Tactics for the monsters to collect. Set AutoMobCount to the desired group size and TankMonsterLimit up to 30 as its cap. Ward needs Taunt Enabled, a usable level, sufficient SP, and a tactic that permits the skill. Gathering respects Taunt's radius and cooldown; Taunt cannot affect bosses under the server's rules. Terrain routing and the configured owner leash still apply.</p>
+<p>Gathering switches to combat when AutoMobCount is reached, capped by TankMonsterLimit. If fewer mobs are available and no nearby eligible targets remain to gather, Kimi starts combat with the smaller group. Gathering Taunt also requires that many eligible mobs within its radius. It uses the attack combo when enabled, otherwise permitted automatic skills and basic attacks. It stays with the collected group instead of returning to the owner between tagged targets. Once the group is gone, ordinary targeting and following resume. Skill Only prevents basic-hit tagging during Taunt cooldown. Other Kimi can gather with basic hits; Taunt is Ward-specific. The limit is a desired count, not a guarantee that an AoE will attract exactly that many monsters.</p>
+<p>Body Double timed example: enable Body Double and UseAutoBD, set BodyDoubleOwnerHP to 0 and Body Double Cast Interval to 30. Kimi requests a cast as soon as ready, then waits at least 30 seconds between requests without checking owner HP. Buff duration does not delay recasting. SP availability and current cast timing can delay a request. The saved Lua key remains BodyDoubleCooldown for compatibility.</p>
+<p>Body Double does not check whether its buff successfully applied or is still active. Automatic casting uses the selected interval and HP mode, skill enable switches, SP, and current cast timing. The interval is measured from the AI cast request; server acceptance is not confirmed.</p>
+</section><section id="blueprint"><h1 id="blueprint-combo-guide">Blueprint Combo Guide</h1>
+<p>This guide documents the Blueprint (Shared) editor in the Refuge testing
+build. It describes the toolbox implemented by <code>GUI/AzzyAIConfig/NodeLibrary.cs</code>
+and <code>ComboTactControl.cs</code>, and the behavior currently implemented by the
+canonical runtime at <code>USER_AI/AI_main.lua</code>. A node being visible in the editor
+does not by itself mean that the runtime implements every advertised behavior.</p>
+<h2 id="monster-tactics-also-apply">Monster tactics also apply</h2>
+<p>Blueprint offensive skill nodes obey the selected monster's skill permission, cast limit, skill class, and SP reserve. A blocked offensive step is skipped; an SP reserve shortage waits. Support actions retain their separate controls. A monster-specific row overrides Default, so a Never row can prevent a skill-only Blueprint from attacking even after rescue selects that monster.</p>
+<p>Snipe OK positions Illusion of Breath and Illusion of Light near casting range on the current target. Normal attack and melee nodes retain their own range. Rescue target selection still follows the HP threshold and Follow-state block; it does not guarantee the selected attack is permitted.</p>
+<p>If a ranged retreat makes no positional progress for 500 ms while the target remains in casting range, Kimi stops repeating that retreat and allows casting from its current position. Positioning is reconsidered when either actor moves. This movement check does not add a skill cooldown; normal skill readiness and tactic restrictions still apply. It does not allow casting at an out-of-range target.</p>
+<h2 id="runtime-setup">Runtime setup</h2>
+<p>Blueprints use two files:</p>
+<ul>
+<li><code>combo_tactics.cbp</code> is the editor's JSON save file. It is read by the GUI,
+not by the game AI.</li>
+<li>An exported Lua file defines <code>ComboTactics1</code>, <code>ComboTactics2</code>, and so on.
+The game loads that Lua file from <code>USER_AI/data</code> when <code>H_Extra.lua</code> calls
+<code>dofile</code>.</li>
+</ul>
+<p>The current <code>H_Extra.lua</code> looks for
+<code>data/ComboTactics_Heal_Sustain_DPS_Combo.lua</code>. The Export Lua dialog defaults
+to <code>ComboTactics.lua</code>, so either save the export using the filename currently
+listed in <code>H_Extra.lua</code> or update that candidate list deliberately. Exporting
+does not install or load the Lua file automatically.</p>
+<p>Enable <code>BlueprintComboEnabled</code> in the Kimi configuration and click Apply. Apply
+writes <code>BlueprintComboEnabled = 1</code> to <code>H_Config.lua</code>, saves the editor state as
+<code>combo_tactics.cbp</code> beside the executable, and refreshes the embedded runtime
+files. A fresh testing profile has Blueprint combos disabled, skill enabled bits
+off, displayed skill levels at 1, and regular combo slots blank. Enable the
+specific active skills needed by the test. Reload the client's user AI after
+Apply; an already loaded AI does not necessarily reread the files.</p>
+<p><code>ComboEnabled</code> controls the older four/eight-slot combo system. It is separate
+from <code>BlueprintComboEnabled</code>. The <code>ComboRunDuringChase</code>,
+<code>ComboRunDuringAttack</code>, <code>ComboRunDuringIdle</code>, <code>ComboResetOnTargetChange</code>, and
+<code>ComboAutoAttackDelay</code> settings belong to that older system; the Blueprint
+dispatcher does not use those flags to decide whether its three state calls run.
+For a clean Blueprint test, leave regular combos and unrelated auto-skill paths
+off so that they cannot obscure the result.</p>
+<h2 id="building-a-graph">Building a graph</h2>
+<p>Drag a toolbox entry onto the canvas. Select a node to edit its properties in
+the PropertyGrid. Drag from an output pin to an input pin. Execution pins are
+triangles; data pins are circles. White is execution, light blue is condition
+data, and red is target data. The right-click menu can duplicate or delete a
+node or delete a connection. <code>Ctrl+C</code>/<code>Ctrl+V</code>, <code>Ctrl+Z</code>/<code>Ctrl+Y</code>, marquee
+selection, Delete, middle-button or space-drag panning, and mouse-wheel zoom
+are also implemented.</p>
+<p>Connections are stored by node and pin GUID. The editor's suggestion menu uses
+node type and pin type to recommend compatible nodes. A freehand drag only
+checks that one endpoint is an input and the other is an output; it does not
+enforce pin-type compatibility. Use the suggestions and inspect the exported
+Lua when a connection is important.</p>
+<p>For execution pins, the editor removes an existing connection from the source
+or target pin before adding the new one. Thus an execution pin has one outgoing
+or incoming link. Data pins are less restricted in the editor, but the runtime
+connection map retains only the last destination for a given source pin and
+the first upstream source found for a given target pin. Avoid fan-out and
+duplicate data links.</p>
+<p>The runtime starts at a trigger node and advances through named connections.
+Conditions choose <code>true</code> or <code>false</code>; normal flow uses <code>then</code> or <code>out</code>; target
+nodes use <code>then</code>; delays use <code>after delay</code> or <code>out</code>. A missing branch or exit
+ends the active combo. There is no graph compiler or cycle validation. The
+runtime limits immediate processing to 12 nodes per tick and resets a combo
+that remains active for 15 seconds. SP failures can hold a skill node for up to
+5 seconds before it is skipped; repeated out-of-range failures can reset a
+combo after about 3 seconds.</p>
+<h2 id="toolbox-nodes">Toolbox nodes</h2>
+<h3 id="triggers">Triggers</h3>
+<p>Each trigger has one execution output named <code>Execute</code> and a <code>TriggerType</code>
+property:</p>
+<table>
+<thead>
+<tr>
+<th>Toolbox node</th>
+<th>Exported trigger</th>
+<th>Runtime polling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>On Attack State</td>
+<td><code>OnAttack</code></td>
+<td>Implemented; polled from attack state</td>
+</tr>
+<tr>
+<td>On Chase State</td>
+<td><code>OnChase</code></td>
+<td>Implemented; polled from chase state</td>
+</tr>
+<tr>
+<td>On Idle State</td>
+<td><code>OnIdle</code></td>
+<td>Implemented; polled from idle state</td>
+</tr>
+<tr>
+<td>On Target Change</td>
+<td><code>OnTargetChange</code></td>
+<td>Exportable, but no runtime dispatch</td>
+</tr>
+<tr>
+<td>On Owner Damage</td>
+<td><code>OnOwnerDamage</code></td>
+<td>Exportable, but no runtime dispatch</td>
+</tr>
+</tbody>
+</table>
+<p>The last two entries are valid editor objects but are not event hooks in the
+current <code>AI_main.lua</code>. An owner-protection graph starting with On Owner Damage
+will never start from owner damage. Owner rescue/protection behavior remains an
+unresolved release item; use an active state trigger plus an <code>Owner HP %</code>
+condition only as a diagnostic workaround.</p>
+<h3 id="skill-nodes">Skill nodes</h3>
+<p>The toolbox contains the pseudo-skill <code>Auto-Attack</code> (<code>SkillID = -1</code>) and active
+catalog entries. Passive catalog entries are intentionally omitted. The active
+entries are:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th style="text-align: right;">ID</th>
+<th style="text-align: right;">Catalog max</th>
+<th>Default target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Master Swap</td>
+<td style="text-align: right;">8005</td>
+<td style="text-align: right;">5</td>
+<td>Owner</td>
+</tr>
+<tr>
+<td>Bastion Renewal</td>
+<td style="text-align: right;">8006</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Ward's Domain</td>
+<td style="text-align: right;">8033</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Taunt</td>
+<td style="text-align: right;">8021</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Quick Defense</td>
+<td style="text-align: right;">8023</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Body Double</td>
+<td style="text-align: right;">8022</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Chaotic Heal</td>
+<td style="text-align: right;">8014</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Illusion of Breath</td>
+<td style="text-align: right;">8024</td>
+<td style="text-align: right;">10</td>
+<td>Enemy</td>
+</tr>
+<tr>
+<td>Illusion of Light</td>
+<td style="text-align: right;">8034</td>
+<td style="text-align: right;">5</td>
+<td>Enemy</td>
+</tr>
+<tr>
+<td>Chaotic Sanctuary</td>
+<td style="text-align: right;">8013</td>
+<td style="text-align: right;">5</td>
+<td>Ground</td>
+</tr>
+<tr>
+<td>Arcane Offering</td>
+<td style="text-align: right;">8015</td>
+<td style="text-align: right;">5</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Illusion of Claw</td>
+<td style="text-align: right;">8009</td>
+<td style="text-align: right;">10</td>
+<td>Enemy</td>
+</tr>
+<tr>
+<td>Fade Away</td>
+<td style="text-align: right;">8012</td>
+<td style="text-align: right;">1</td>
+<td>Self</td>
+</tr>
+<tr>
+<td>Mirage Assault</td>
+<td style="text-align: right;">8036</td>
+<td style="text-align: right;">5</td>
+<td>Enemy</td>
+</tr>
+<tr>
+<td>Illusion Crusher</td>
+<td style="text-align: right;">8031</td>
+<td style="text-align: right;">5</td>
+<td>Enemy</td>
+</tr>
+<tr>
+<td>Blood Sweep</td>
+<td style="text-align: right;">8032</td>
+<td style="text-align: right;">10</td>
+<td>Enemy</td>
+</tr>
+</tbody>
+</table>
+<p>Every skill node has:</p>
+<ul>
+<li>Input <code>Execute</code> (execution) and <code>Target</code> (data).</li>
+<li>Outputs <code>Then</code>, <code>On Success</code>, and <code>On Fail</code> (all execution).</li>
+<li><code>SkillLevel</code>, <code>MaxLevel</code>, <code>RepeatCount</code>, and <code>TargetMode</code> in the property
+grid. Auto-Attack hides its level and uses only <code>RepeatCount</code>.</li>
+</ul>
+<p>The selected Kimi's <code>KimiSkillEnabled</code> and <code>KimiSkillLevels</code> settings are the
+actual cast gate. A configured level always overrides the level requested by a
+Blueprint node; a disabled, passive, or wrong-type skill is skipped. Learned
+skill and loyalty rules remain server/client rules. The catalog marks Fade Away,
+Mirage Assault, and Blood Sweep as fallback/unverified metadata, and levels of
+Illusion of Claw above the verified range still need field confirmation.</p>
+<p>The runtime follows the <code>Then</code> connection after a skill. It never follows
+<code>On Success</code> or <code>On Fail</code>, even though those pins are drawn and exported. Use
+<code>Then</code> for a reliable chain. A failed dispatch, cooldown, insufficient SP, or
+range check normally keeps the node active; a disabled or rejected Kimi skill
+can advance to <code>Then</code>.</p>
+<p>Skill <code>TargetMode</code> is serialized, but <code>HandleSkillNode</code> resolves a target from
+an upstream Target data connection, the previously selected runtime target, or
+the current enemy. It does not use the skill node's <code>targetMode</code> property to
+select a new actor. Use a Set Target node and connect its <code>Target</code> output to the
+skill's <code>Target</code> input when target selection matters. Kimi metadata still forces
+catalog self/owner targeting where applicable.</p>
+<p>Auto-Attack <code>RepeatCount</code> counts calls to the native <code>Attack</code> command. It does
+not count exact individual hits. A native attack can continue producing attacks
+while the AI waits for the configured timer. The attempted animation-based
+counter was removed after it stalled at slot 1; the timer-based progression is
+restored and the latest rollback still needs in-game confirmation.</p>
+<h3 id="condition-nodes">Condition nodes</h3>
+<p>Every condition has input <code>Check</code> (execution), outputs <code>True</code> and <code>False</code>
+(execution), and <code>Value</code> (data). The property grid exposes <code>ConditionType</code>,
+<code>Operator</code>, and <code>Value</code>. Operators are <code>&gt;=</code>, <code>&lt;=</code>, <code>==</code>, <code>&gt;</code>, and <code>&lt;</code>; values
+are integer thresholds. Set <code>&lt;=</code> explicitly for a low-HP condition. The GUI's
+descriptive text does not change the operator's default.</p>
+<p>The visible condition entries and current runtime status are:</p>
+<table>
+<thead>
+<tr>
+<th>Toolbox node</th>
+<th>GUI <code>ConditionType</code></th>
+<th>Runtime status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kimi HP %</td>
+<td><code>KimiHP</code></td>
+<td>Supported (<code>kimihp</code> alias)</td>
+</tr>
+<tr>
+<td>Owner HP %</td>
+<td><code>OwnerHP</code></td>
+<td>Supported</td>
+</tr>
+<tr>
+<td>Kimi SP %</td>
+<td><code>KimiSP</code></td>
+<td><strong>Unsupported as emitted</strong>; use <code>SP</code> or <code>SelfSP</code> in the editable type field</td>
+</tr>
+<tr>
+<td>Owner SP %</td>
+<td><code>OwnerSP</code></td>
+<td>Supported</td>
+</tr>
+<tr>
+<td>Mob Count</td>
+<td><code>MobCount</code></td>
+<td>Supported; runtime default scan range is 10 cells</td>
+</tr>
+<tr>
+<td>Distance to Target</td>
+<td><code>Distance</code></td>
+<td>Supported; compares cell distance to current/runtime target</td>
+</tr>
+<tr>
+<td>Skill on Cooldown</td>
+<td><code>Cooldown</code></td>
+<td><strong>Unsupported; evaluates false</strong></td>
+</tr>
+<tr>
+<td>In Combat</td>
+<td><code>InCombat</code></td>
+<td><strong>Unsupported; evaluates false</strong></td>
+</tr>
+<tr>
+<td>Kimi Type</td>
+<td><code>HomuType</code></td>
+<td>Supported; values Ward 1, Occult 2, Agile 3, Raging 4</td>
+</tr>
+</tbody>
+</table>
+<p>The runtime also accepts <code>selfhp</code>, <code>kimi_hp</code>, <code>health_below</code>, <code>sp</code>, and
+<code>selfsp</code>. Unknown condition names evaluate false. A condition's execution
+<code>Check</code> path is useful for ordinary branching. For a logic gate, its <code>Value</code>
+output is the meaningful connection; the runtime reads the upstream condition
+directly when it evaluates A or B.</p>
+<h3 id="logiccontrol-nodes">Logic/control nodes</h3>
+<p>The toolbox currently offers <code>AND</code>, <code>OR</code>, <code>XOR</code>, <code>NAND</code>, <code>NOR</code>, <code>NOT</code>,
+<code>Sequence</code>, <code>Loop N Times</code>, and <code>Wait Delay</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Node</th>
+<th>Inputs</th>
+<th>Outputs</th>
+<th>Properties</th>
+<th>Runtime status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AND / OR / XOR / NAND / NOR</td>
+<td><code>In</code>, data <code>A</code>, data <code>B</code></td>
+<td><code>Out</code></td>
+<td><code>LogicType</code></td>
+<td>Supported; reads condition values upstream of A/B</td>
+</tr>
+<tr>
+<td>NOT</td>
+<td><code>In</code>, data <code>A</code></td>
+<td><code>Out</code></td>
+<td><code>LogicType</code></td>
+<td>Supported; negates A</td>
+</tr>
+<tr>
+<td>Sequence</td>
+<td><code>In</code></td>
+<td><code>Out</code></td>
+<td><code>LogicType</code></td>
+<td><strong>Not implemented; treated as unknown flow</strong></td>
+</tr>
+<tr>
+<td>Loop N Times</td>
+<td><code>In</code></td>
+<td><code>Out</code>, <code>Loop Body</code>, <code>Completed</code></td>
+<td><code>LogicType</code>, <code>LoopCount</code></td>
+<td><strong>Not implemented; loop body is not run</strong></td>
+</tr>
+<tr>
+<td>Wait Delay</td>
+<td><code>In</code></td>
+<td><code>Out</code></td>
+<td><code>LogicType</code>, <code>DelayMs</code></td>
+<td>Supported; exported as <code>duration</code> and held across ticks</td>
+</tr>
+</tbody>
+</table>
+<p>For AND/OR-style gates, connect condition <code>Value</code> to A and B, connect an
+execution path into <code>In</code>, and connect <code>Out</code> to the next action. The current
+PropertyGrid enum exposes only Delay, Loop, AND, OR, and Sequence; it omits
+XOR, NAND, NOR, and NOT. Those four nodes can be inserted and export their
+original <code>LogicType</code>, but selecting them may display as Delay and the dropdown
+cannot choose them. Do not edit their LogicType unless the resulting operation
+is one of the five displayed values.</p>
+<p>The editor contains a private range-check factory and deprecated Target Selector
+factory, but neither is added to the toolbox. There is no user-creatable range
+node or Target Selector node in the current GUI. The old <code>UseComboDelay</code> property
+is hidden and is not part of the active node templates.</p>
+<h3 id="target-node">Target node</h3>
+<p><code>Set Target</code> has input <code>Set</code> (execution), outputs <code>Then</code> (execution) and
+<code>Target</code> (data), and a <code>TargetMode</code> dropdown. The editor offers Enemy, Owner,
+Self, Ground, Ally, NearestEnemy, FarthestEnemy, StrongestEnemy,
+WeakestEnemy, NearestAlly, FarthestAlly, Focus, and MobID, plus a <code>MobID</code>
+integer field.</p>
+<p>The runtime resolves Enemy/Current, Owner, Self/Kimi, Ally, nearest/farthest/
+strongest/weakest Enemy, nearest/farthest Ally, Focus, and MobID. <code>MobID</code> picks
+the nearest visible enemy whose type matches the ID. <code>Ground</code> has no branch in
+the current resolver and falls back to the enemy target; ground-skill behavior
+therefore needs in-game verification. For deterministic use, connect both
+<code>Then</code> into the skill flow and <code>Target</code> into the skill's <code>Target</code> data pin.</p>
+<h3 id="end-node">End node</h3>
+<p><code>End</code> has one execution input <code>In</code>, no output, and:</p>
+<ul>
+<li><code>RepeatMode</code>: <code>Once</code>, <code>Always</code>, <code>OncePerTarget</code>, or <code>XTimes</code>.</li>
+<li><code>RepeatCount</code>: used by <code>XTimes</code>.</li>
+</ul>
+<p>The runtime tracks executions by combo name. <code>Always</code> restarts on the next
+tick; <code>XTimes</code> restarts until its count is reached; <code>OncePerTarget</code> records the
+target and does not immediately restart for the same target; <code>Once</code> stops the
+active run and lets normal AI continue after reaching the end. These modes do
+not prevent a later trigger from starting a fresh run, because the dispatcher
+does not gate combo start on the stored execution count. Give each exported
+combo a stable trigger title/name when using end-mode tracking.</p>
+<h2 id="examples-that-match-the-runtime">Examples that match the runtime</h2>
+<h3 id="basic-attack-chain">Basic attack chain</h3>
+<p>Create and connect:</p>
+<pre><code class="language-text">On Attack State.Execute
+  -&gt; Set Target.Set
+Set Target.Then
+  -&gt; Illusion of Claw.Execute
+Set Target.Target
+  -&gt; Illusion of Claw.Target
+Illusion of Claw.Then
+  -&gt; Wait Delay.In
+Wait Delay.Out
+  -&gt; End.In
+</code></pre>
+<p>Set the target mode to <code>Enemy</code>, skill level to a configured learned level, and
+delay to a value appropriate for the skill. The same pattern works with Auto-
+Attack; its repeat count is native attack commands.</p>
+<h3 id="owner-hp-emergency-gate">Owner-HP emergency gate</h3>
+<p>Use an <code>On Attack State</code> or <code>On Idle State</code> trigger, then connect its Execute
+output to <code>Owner HP % .Check</code>. Set Operator <code>&lt;=</code> and Value <code>30</code>; connect
+<code>True</code> to <code>Body Double.Execute</code> and <code>False</code> to <code>End.In</code>. Body Double is still
+subject to enabled level, Kimi type, loyalty, SP, cooldown, and server success.
+This demonstrates a state-polled owner condition; it does not make the
+unimplemented On Owner Damage event work.</p>
+<h3 id="two-condition-gate">Two-condition gate</h3>
+<p>Add <code>Kimi HP %</code> with <code>&lt;= 50</code> and <code>Owner HP %</code> with <code>&lt;= 30</code>. Connect each
+condition's <code>Value</code> pin to an <code>AND</code> node's A and B pins. Connect an execution
+path to <code>AND.In</code>, then <code>AND.Out</code> to Body Double or another skill. The runtime
+evaluates the two upstream condition nodes when it reaches AND; their <code>Check</code>
+pins do not need to be part of the execution path for this gate pattern.</p>
+<h3 id="weakest-target-action">Weakest-target action</h3>
+<p>Connect <code>On Attack State.Execute</code> to <code>Set Target.Set</code>, set <code>TargetMode</code> to
+<code>WeakestEnemy</code>, connect <code>Then</code> to a skill's <code>Execute</code>, and connect <code>Target</code> to
+that skill's <code>Target</code>. A later skill can reuse the runtime target if the Target
+data link is omitted, but an explicit link is easier to audit.</p>
+<h2 id="save-load-and-export-details">Save, load, and export details</h2>
+<p>Save writes readable JSON containing node IDs/types/categories/titles, positions
+and sizes, colors, property dictionaries, pin definitions, and connection
+records. Descriptions are intentionally not persisted; Load regenerates them
+from the current library. On Load, known nodes receive the current template
+pins and new pin GUIDs; saved connections are remapped by pin name/type. Skill
+levels are clamped to the current catalog maximum and missing target defaults
+are filled in. An unknown node title falls back to its saved pins.</p>
+<p>Save Settings and Apply use the executable directory's <code>combo_tactics.cbp</code>.
+The Save dialog can write another <code>.cbp</code>, and the GUI copies that content back
+to the default file for the next launch. Keep the <code>.cbp</code> with the GUI as the
+editable source and keep the exported Lua file under <code>USER_AI/data</code> for the
+game.</p>
+<p>Export creates one Lua combo per trigger node, using the connected component
+around that trigger. It assigns numbered globals, sanitizes the trigger title
+for the combo name, writes <code>enabled = true</code> and <code>priority = 1</code>, and emits every
+stored connection with <code>fromPin</code> and <code>toPin</code>. A graph with multiple disconnected
+trigger components can therefore produce multiple combos. Include a real
+trigger node in every graph. The advertised no-trigger <code>ALWAYS</code> fallback emits
+an empty combo without a trigger node; the runtime rejects it as “missing trigger
+node.”</p>
+<p>The runtime accepts numbered globals (<code>ComboTactics1</code>, <code>ComboTactics2</code>, ...),
+or a single <code>ComboTactics</code> table. It requires each accepted combo to have a
+<code>nodes</code> table, a trigger node, and connections whose pin names match the runtime
+flow. The Lua export is data consumed by the runtime; it is not a compiled
+program, so unsupported node operations remain unsupported after export.</p>
+<h2 id="release-testing-notes">Release testing notes</h2>
+<p>Use logs and the actual game client to verify casts. Local level, SP, cooldown,
+range, and target checks do not prove that the server accepted or applied a
+skill. Test one short <code>On Attack</code> graph first, then add a condition, target
+selection, delay, and repeat behavior one at a time. Capture Kimi type, enabled
+skills/levels, exported Lua, <code>combo_tactics.cbp</code>, and the relevant <code>AAI_*</code> log
+entries with the failure timestamp.</p>
+<p>The following are known release limitations:</p>
+<ul>
+<li>Blueprint auto-attack repeat counts are native <code>Attack</code> command counts, not
+exact hit counts.</li>
+<li>The animation-counter experiment was reverted after an in-game slot-1 stall;
+timer-based progression is restored. Regular combos were subsequently reported working; full Blueprint coverage remains unverified.</li>
+<li>On Owner Damage and On Target Change nodes have no dispatch call in the
+runtime. Owner-protection activation through that trigger is unresolved.</li>
+<li>The editor advertises more conditions, control nodes, target modes, and pins
+than the current runtime consumes. The compatibility tables above are the
+authoritative testing surface.</li>
+<li>The GUI project embeds runtime files from <code>USER_AI</code> at build time. Rebuild the
+GUI after changing canonical Lua; applying an older executable can reinstall
+an older embedded runtime beside the client.</li>
+</ul>
+<h2 id="sharing-one-graph-across-kimi-types">Sharing one graph across Kimi types</h2>
+<p>Use a Kimi Type condition to branch for Ward (1), Occult (2), Agile (3), or Raging (4), then connect each branch to compatible skills. This selects behavior for the current Kimi; it does not control four Kimi simultaneously. The independent Combo page on each named tab is the standard slot-based system, separate from Blueprint.</p>
+</section><section id="changelog"><h1 id="changelog">Changelog</h1>
+<p>Documentation synchronized on 14 September 2026. Recent entries describe the current GUI and runtime fixes. Checks cover builds, selected settings round-trips, tab initialization, and AoE boundaries; in-game verification remains necessary.</p>
+<p>Still outstanding: missing-route handling and unsupported legacy tactic specializations. Owner rescue and ranged positioning have new code fixes described below; in-game behavior is not yet verified.</p>
+<h2 id="bastion-configured-recast-interval">Bastion configured recast interval</h2>
+<ul>
+<li>Positive Bastion Renewal Cooldown values now replace the stored 15-second cooldown instead of being clamped to at least 15 seconds. Setting 2 allows another attempt after two seconds when the other casting conditions are met.</li>
+<li>Zero retains the 15-second catalog fallback. HP conditions, SP, and current cast timing remain enforced; the AI does not guarantee server acceptance.</li>
+</ul>
+<h2 id="tank-gather-respects-automobcount">Tank – Gather respects AutoMobCount</h2>
+<ul>
+<li>Changed the gather target to AutoMobCount, capped by TankMonsterLimit.</li>
+<li>Start combat at AutoMobCount, or with a smaller collected group when no nearby eligible targets remain to gather.</li>
+<li>Gathering Taunt now requires the configured group count within its radius instead of firing on a single target. Once combat starts, the collected group is finished before starting another batch.</li>
+</ul>
+<h2 id="body-double-recasting-without-a-duration-lock">Body Double recasting without a duration lock</h2>
+<ul>
+<li>Removed the artificial Body Double reuse lock based on its 10–50 second buff duration for all four Kimi. The skill has no built-in cooldown in the supplied skill information.</li>
+<li>Body Double can now be requested once each configured cast interval even while its previous buff may still be active. Enable switches, SP, and current cast timing remain enforced.</li>
+<li>The AI does not confirm successful buff application; the interval runs from the cast request.</li>
+</ul>
+<h2 id="timed-automatic-body-double">Timed automatic Body Double</h2>
+<ul>
+<li>Renamed Body Double Cooldown to Body Double Cast Interval on all four Kimi tabs, with seconds and HP-mode behavior explained in the description.</li>
+<li>Owner HP threshold 0 plus a positive interval now enables timed automatic casting without checking owner HP. Both values 0 disables automatic casting; a positive HP threshold retains HP-based casting.</li>
+<li>UseAutoBD, Body Double Enabled, SP, skill reuse, and active-duration limits remain enforced. The saved BodyDoubleCooldown key is retained for compatibility.</li>
+</ul>
+<h2 id="tank-pull-and-tank-gather">Tank – Pull and Tank – Gather</h2>
+<ul>
+<li>Preserved the existing Tank tactic as Tank - Pull (value -1), and added Tank - Gather (value -3) with GUI save/load support.</li>
+<li>Raised TankMonsterLimit's maximum and new default to 30; the deployed configuration is set to 30.</li>
+<li>Gather approaches within Ward's Taunt radius and casts when the skill is ready. During cooldown, it can tag targets with basic hits unless Skill Only is enabled.</li>
+<li>Gather starts the configured attack combo or permitted skills after reaching the limit or exhausting eligible targets, staying with the group until it is gone. Terrain routing, skill cooldowns, tactic restrictions, and the owner leash remain in effect.</li>
+<li>Checked gathering transitions, Taunt radius/cooldown behavior, terrain line-of-sight handling, and GUI compilation. In-game testing remains necessary.</li>
+</ul>
+<h2 id="master-swap-chaotic-heal-and-per-kimi-aoe-controls">Master Swap, Chaotic Heal, and per-Kimi AoE controls</h2>
+<ul>
+<li>Restored automatic Master Swap HP and cooldown controls for Ward, Occult, and Agile. Added the corresponding runtime scheduler using Master Swap Enabled, with zero HP threshold disabling automatic casts. UseMasterSwap remains hidden and is not a second enable gate.</li>
+<li>Removed the redundant UseChaoticHeal gate. Automatic healing still respects the skill Enabled switch, UseAutoHeal, HP thresholds, SP, and cooldowns.</li>
+<li>Expanded OnlyAOE to Ward and Raging alongside Occult. Automatic selection now uses the appropriate Kimi skill instead of always requesting Illusion of Light. Offensive combo filtering recognizes catalogued AoE skills and leaves support skills available.</li>
+<li>Reviewed the supplied skill screenshots. Ward and Agile screenshots show Master Swap; Occult is retained based on the existing catalog and user confirmation. No Master Swap is shown in the supplied Raging images.</li>
+</ul>
+<h2 id="body-double-automation-and-configurable-support-cooldowns">Body Double automation and configurable support cooldowns</h2>
+<ul>
+<li>Replaced the redundant Use Body Double automatic control with UseAutoBD for each Kimi. The skill enable switch remains in Skills &amp; Behavior, and legacy configurations retain their automatic setting.</li>
+<li>Moved automatic Body Double out of the offensive buff scheduler. It checks the owner HP threshold during combat as well as idle updates. Zero disables the HP trigger; positive values trigger at or below the threshold, subject to skill availability, SP, and reuse limits.</li>
+<li>Added Body Double Cooldown for every Kimi and Bastion Renewal Cooldown for Ward, in seconds. Zero adds no extra delay; configured intervals cannot shorten the runtime skill reuse/duration limits. These limits apply to automatic, combo, and manual requests.</li>
+<li>Hid unused Master Swap automatic controls; Master Swap Enabled remains in Skills &amp; Behavior.</li>
+<li>Checked all Body Double thresholds from 1 through 100 for all four Kimi, disabled triggers, legacy fallback, and cooldown limits. Server acceptance still requires in-game testing.</li>
+</ul>
+<h2 id="bastion-healing-dispatch-with-lag-reduction">Bastion healing dispatch with Lag Reduction</h2>
+<ul>
+<li>Fixed the Always auto-heal path returning before sending a skill queued by Lag Reduction. The queued heal is now sent before that return.</li>
+<li>Added optional Bastion diagnostics below the HP threshold: reuse wait, global skill delay, disabled or invalid skill, insufficient SP, and cast request/rejection. Enable Debug Logging to collect these messages; output is limited to one message every five seconds.</li>
+<li>This fixes a reproducible dispatch defect. A cast request does not confirm that the server accepted the skill; in-game testing is still required.</li>
+</ul>
+<h2 id="bastion-healing-helper-visibility">Bastion healing helper visibility</h2>
+<ul>
+<li>Fixed Bastion automatic healing calling a helper that was local to AzzyUtil.lua. GetReadyKimiSkill is now shared with AI_main.lua.</li>
+<li>Verified by loading the actual utility module and checking Bastion HP threshold, reuse, and disabled-skill behavior.</li>
+</ul>
+<h2 id="owner-return-routing-follow-up">Owner-return routing follow-up</h2>
+<ul>
+<li>Connected the remaining direct owner-return helper and no-target idle return to terrain routing.</li>
+<li>Return arrival now requires a walkable connection, not merely line of sight across a gap. The owner's occupied endpoint is allowed for this connection check.</li>
+<li>Return searches can explore the map beyond the combat leash and continue across AI updates. A moving owner no longer discards an unfinished return search on every position update.</li>
+<li>Verified direct-helper delegation and wall return with the owner tile occupied.</li>
+</ul>
+<h2 id="manual-skill-command-priority">Manual skill command priority</h2>
+<ul>
+<li>Manual targeted skills now use their command state instead of entering automated combo chase. Explicit targeted and ground commands are handled before automatic healing, rescue selection, and combos, while retaining spawn and owner-leash gates.</li>
+<li>Command handlers wait for active casts and retain temporarily rejected casts for bounded retries. Manual targeted movement uses terrain routing to the requested skill range.</li>
+<li>Verified manual Blood Sweep with combos enabled and rejected-cast retry behavior. Offensive auto-skills remain suppressed while a combo runs; that interaction is unchanged pending clarification.</li>
+</ul>
+<h2 id="cell-boundaries-and-opportunistic-targeting">100-cell boundaries and opportunistic targeting</h2>
+<ul>
+<li>Raised detection, movement, and kite controls and runtime limits to 100; updated active and shipping settings.</li>
+<li>Fixed map navigation bypassing opportunistic selection. Removed the selected-skill exclusion and prevented movement resets when the chosen target is unchanged. Equal-distance targets retain the current target.</li>
+<li>Continued long A* searches in bounded batches across updates instead of rejecting them at the earlier small search limit or blocking a single AI update.</li>
+<li>Verified the formerly blocked recorded corner route, return routing, nearest-target selection before navigation, disabled behavior, and same-target stability.</li>
+</ul>
+<h2 id="optional-debug-logging">Optional debug logging</h2>
+<ul>
+<li>Added a saved True/False Enable Debug Logging control to Kimi Settings, defaulting to False. The master switch gates recurring TraceAI, category, and logappend file writes.</li>
+<li>Verified GUI persistence and zero log-file opens from the recurring logging functions while disabled; enabling restores output. Existing logs are preserved.</li>
+</ul>
+<h2 id="navigation-performance-correction">Navigation performance correction</h2>
+<ul>
+<li>Replaced breadth-first terrain searches with target-directed A* and a bounded search workload. Rejects exact destinations inside walls before searching.</li>
+<li>Retains separate failed-route retry entries so alternating movement requests cannot repeatedly trigger the same failed searches.</li>
+<li>Replaying twelve route requests from the lag report decreased from about 2.7 seconds to 0.1 seconds locally. Wall routing, owner return, and boundary checks still pass; in-game performance remains to be confirmed.</li>
+</ul>
+<h2 id="terrain-aware-owner-return-and-60-cell-boundaries">Terrain-aware owner return and 60-cell boundaries</h2>
+<ul>
+<li>Routed normal and emergency owner return through terrain navigation, choosing a reachable stand-off tile. Return recovery includes a starting position outside the current combat leash.</li>
+<li>Raised the five detection, movement-bound, and kite-bound controls and runtime caps to 60. Updated active and shipping settings; skill ranges and client visibility remain unchanged.</li>
+<li>Verified wall return from outside the leash, GUI acceptance of 60-cell settings, route checks, Lua syntax, and EXE build.</li>
+</ul>
+<h2 id="route-search-responsiveness">Route search responsiveness</h2>
+<ul>
+<li>Removed the shared 250 ms route-search delay. The one-second retry backoff now applies only to the same failed destination, owner boundary, and starting cell. A new target or changed position can be routed immediately.</li>
+<li>Verified that an unreachable destination does not delay a reachable destination requested in the same AI tick.</li>
+</ul>
+<h2 id="navigation-movement-and-map-search-follow-up">Navigation movement and map search follow-up</h2>
+<ul>
+<li>Replaced one-cell route commands with checked path segments of up to eight cells. Kept the current endpoint while moving and suppressed repeated commands to reduce stop-start movement.</li>
+<li>Removed the top map selector and dropdown. Typing directly in Navigation Map now opens a matching-map suggestion list below the value field. Click a result or use arrow keys and Enter. Verified typing, popup visibility, selection, and persistence through the actual shared settings grid.</li>
+<li>The moc_pryd05 regression traverses the same 31-cell route with five segment commands. Terrain, owner-boundary, occupied-cell, and settings checks pass; smoothness still needs in-game confirmation.</li>
+</ul>
+<h2 id="september-2026-selected-map-navigation">15 September 2026 — Selected-map navigation</h2>
+<ul>
+<li>Added a searchable Navigation Map dropdown with 1,276 maps and a disabled default. Selection is included in settings save/load.</li>
+<li>Added packed terrain data, bounded waypoint routing, terrain-aware ranged chase, and wall/corner checks for kiting. Existing tactics and configured movement boundaries remain in effect.</li>
+<li>Included navigation resources in the config EXE and release package so GUI deployment retains the feature.</li>
+<li>Verified the logged moc_pryd05 wall route, owner boundary, occupied-cell rejection, missing-map fallback, and Lua syntax. In-game behavior still needs testing.</li>
+</ul>
+<h2 id="september-2026-limited-chase-detours">15 September 2026 — Limited chase detours</h2>
+<ul>
+<li>Added bounded lateral waypoint attempts before blocked chases or attack timeouts give up. Successful movement retries the target approach; failed attempts remain bounded by time, count, and the owner leash.</li>
+<li>Preserved no-chase tactics and invalid-target checks. Known occupied cells are skipped; wall walkability still depends on the client's movement handling.</li>
+<li>Verified waypoint retry/progress handling, leash and tactic gates, bounded failure, Lua syntax, and the embedded-runtime EXE build. No claim of full map-aware pathfinding or in-game success.</li>
+</ul>
+<h2 id="september-2026-simplified-ward-healing-controls">15 September 2026 — Simplified Ward healing controls</h2>
+<ul>
+<li>Removed the redundant Auto Bastion Renewal toggle and Bastion Renewal Interval from the GUI. Automatic Bastion now uses its skill Enabled switch, UseAutoHeal scheduling, HP threshold, and skill reuse checks. Legacy toggle/interval values no longer suppress or delay it.</li>
+<li>Changed Use Body Double to a True/False choice while preserving 0/1 Lua compatibility. Its automatic buff path now respects False; explicit combo casts remain separate.</li>
+<li>Verified control visibility, boolean profile save/load, Bastion threshold/reuse behavior, and the rebuilt EXE.</li>
+</ul>
+<h2 id="september-2026-ward-healing-and-movement-boundaries">15 September 2026 — Ward healing and movement boundaries</h2>
+<ul>
+<li>Added Ward's saved Bastion Renewal HP Threshold and exposed UseAutoHeal scheduling for Ward. Connected the automatic toggle and interval to healing; prevented the generic defensive-buff path from bypassing the HP check. Skill ID 8006 is unchanged.</li>
+<li>Raised detection, movement-leash, and kite-bound controls to a maximum of 30. Replaced the hardcoded 14-cell movement rejection with the configured leash; long travel retains short movement requests.</li>
+<li>Opportunistic targeting now prefers nearest eligible ordinary targets during chase and combat. Rescue and active casting remain protected. After a target is lost or killed, no-target idle processing returns to the owner before idle walking.</li>
+<li>Added a named Ward setup. Verified GUI profile persistence, 30-cell controls, movement boundary checks, nearest selection, Bastion HP/reuse gates, and the build. Client visibility and wall pathfinding remain game-dependent.</li>
+</ul>
+<h2 id="blocked-ranged-retreat">Blocked ranged retreat</h2>
+<ul>
+<li>Fixed ranged repositioning repeatedly postponing casts when a wall prevents retreat. After 500 ms without positional progress, an in-range target can be cast on from the current position. The failed retreat is not repeated until either actor moves.</li>
+<li>Verified with a mocked blocked-movement regression, Lua syntax check, and config EXE build. In-game terrain testing remains necessary.</li>
+</ul>
+<h2 id="september-2026-tactics-ranged-combos-and-ward-portrait">14 September 2026 — Tactics, ranged combos, and Ward portrait</h2>
+<ul>
+<li>Made standard and Blueprint offensive combo skills honor target tactic permissions, cast limits, level limits, skill class, and SP reserves. Support actions keep their separate skill controls.</li>
+<li>Changed Snipe OK to maintain Breath/Light casting distance on the current target. Ranged positioning stays within the skill range and owner movement bounds; normal and melee attack steps keep their own range.</li>
+<li>Prevented generic melee attack recovery from forcing an active skill combo onto the monster's cell. Generic movement now reads the current combo action's range.</li>
+<li>Allowed owner rescue to recognize a living enemy targeting the owner between attack or cast motions. Preserved the configured HP threshold, monster eligibility, movement limits, and Follow-state block. An HP drop alone cannot identify an attacker.</li>
+<li>Fixed specialized cast reactions assigning a function instead of the numeric skill-command state. Cast reactions now require an actual casting motion. Unsupported legacy skill-class choices remain documented.</li>
+<li>Added the supplied Ward screenshot portrait to the GUI. Updated the rescue tooltip and user guide.</li>
+<li>Validation: GUI build and focused mocked Lua checks for tactic gates, ranged positioning, and rescue filtering. Game casting and movement remain subject to in-game testing.</li>
+</ul>
+<h2 id="bastion-renewal-labels">Bastion Renewal labels</h2>
+<ul>
+<li>Replaced visible Warm Def labels with Bastion Renewal in the GUI and guide. Existing Lua setting keys remain compatible with saved configurations.</li>
+</ul>
+<h2 id="occult-healing-controls">Occult healing controls</h2>
+<ul>
+<li>Hid legacy HealSelfHP and HealOwnerHP fields. Kept UseAutoHeal because it schedules healing checks, and clarified its description to reference Chaotic Heal and its current HP thresholds.</li>
+</ul>
+<h2 id="automatic-skill-profiles-and-aoe-radii">Automatic skill profiles and AoE radii</h2>
+<ul>
+<li>Moved all AutoSkill and Autobuff controls into each Kimi's Automatic Skills page, with independent saved values. Healing controls are shown only for Occult; type-specific buff controls are filtered appropriately. Older global automatic settings are inherited on migration.</li>
+<li>Recorded Illusion of Light as 3x3, Sanctuary and Blood Sweep as 5x5, Ward's Domain as radius 4, and Taunt as radii 5/5/6/6/7. Radius entries are explicitly distinguished from square widths.</li>
+<li>Fixed self-centered AoE attack checks to use the effect radius rather than zero self-cast range.</li>
+</ul>
+<h2 id="kimi-tabs-and-combo-profiles">Kimi tabs and combo profiles</h2>
+<ul>
+<li>Added colored Ward, Occult, Agile, and Raging tabs with applicable skills and behavior settings. Shared behavior remains in Kimi Settings.</li>
+<li>Added independent standard combo profiles, including named settings import/export and runtime selection for the detected Kimi. Combo skill lists show the appropriate Kimi's active skills.</li>
+<li>Added source screenshot portraits for Occult, Agile, and Raging. Ward initially used a placeholder, replaced by the supplied portrait in the latest entry. The Blueprint editor remains shared and is labeled accordingly.</li>
+</ul>
+<h2 id="blood-sweep-area-correction">Blood Sweep area correction</h2>
+<ul>
+<li>Corrected Blood Sweep's AoE from an empty size table to a 5x5 area at levels 1–10. Automatic casting can now count eligible mobs instead of always counting zero. The corrected metadata is included in the config EXE.</li>
+</ul>
+<h2 id="settings-file-import-and-export">Settings file import and export</h2>
+<ul>
+<li>Fixed loading named Kimi settings files so the grid refreshes and Apply becomes available. Saved settings preserve additional Lua configuration entries. File dialog errors are reported without closing the program.</li>
+</ul>
+<h2 id="september-2026-kimi-aoe-availability">14 September 2026 — Kimi AoE availability</h2>
+<ul>
+<li>Fixed enabled Kimi AoE skills, including Blood Sweep, being blocked by hidden legacy homunculus toggles during chase and attack. AutoSkill, AoE mode, target-count, and skill readiness checks still apply. The config EXE embeds the corrected runtime so saving settings preserves the fix.</li>
+</ul>
+<h2 id="refuge-testing-release-a-13-september-2026">Refuge testing release â€” 13 September 2026</h2>
+<p>This records work completed during the Refuge adaptation and testing session. It separates newly implemented changes from inherited features, reversions, and unresolved behavior. No individual semantic version numbers or release dates have been invented for intermediate builds.</p>
+<h3 id="skills-and-gui-configuration">Skills and GUI configuration</h3>
+<ul>
+<li>Added a unified catalog for Ward, Occult, Agile, and Raging Kimi: 24 unique skills, 16 active and 8 passive, with 32 per-type memberships.</li>
+<li>Added per-type skill categories, active skill level controls, separate Enabled switches, and passive summaries. Displayed active levels start at 1 and respect catalog maxima.</li>
+<li>Added persistent KimiSkillLevels and KimiSkillEnabled data and compatibility with existing skill-level settings.</li>
+<li>Added shared gates for type compatibility, passive rejection, enabled state, level limits, SP availability, and cooldowns.</li>
+<li>Updated self, owner, enemy, and ground targeting through shared dispatch. Added percentage-based and partial SP cost metadata where supplied.</li>
+<li>Used supplied skill IDs and tooltips for verified metadata, while marking remaining fallback or uncertain timings. Full catalog inclusion does not mean all skills were tested in-game.</li>
+</ul>
+<h3 id="runtime-reliability">Runtime reliability</h3>
+<ul>
+<li>Fixed the startup version diagnostic that could concatenate a nil value.</li>
+<li>Corrected the recognized stock OnAutoBuffs hook so returning without casting does not freeze normal AI state processing.</li>
+<li>Corrected healing and combo-buff timeout calculations that added the current clock twice.</li>
+<li>Corrected regular combo state handling: process an issued skill before checking its newly reduced SP or changed cooldown; clear stale timers on slot advancement; skip zero-count slots; preserve the current slot while waiting for SP.</li>
+<li>Changed generated skill calls to use shared DoSkill dispatch, including ground-target handling.</li>
+</ul>
+<h3 id="gui-installation-and-saving">GUI installation and saving</h3>
+<ul>
+<li>Embedded 15 homunculus runtime/configuration resources in KimiAIConfig.exe.</li>
+<li>Added startup and pre-Apply installation beside the EXE. Six core files update from the embedded build; missing user files are created without replacing existing user files during installation.</li>
+<li>Added one-time core backups, data/ErrorLog creation, and a marker-specific migration for the broken stock H_Extra hook while preserving surrounding custom content.</li>
+<li>Kept Extra Options Save from replacing H_Extra with an empty or generated stub.</li>
+<li>Fixed a setting-name collision: ComboEnabled could read BlueprintComboEnabled. Anchored both readers and the shared writer so the two options load/save independently and comments are not treated as assignments.</li>
+</ul>
+<h3 id="auto-attack-experiment-and-reversion">Auto-attack experiment and reversion</h3>
+<ul>
+<li>Investigated extra ordinary attacks between combo steps. The native Attack command starts continued attacking; a command count does not equal a hit count.</li>
+<li>Tried animation-based completion tracking with cancellation and retry handling in both combo modes.</li>
+<li>In-game logs showed repeated motion timeouts and a slot-1 stall despite passing mocked motion tests.</li>
+<li>Removed that experiment and restored timer-based command progression in both the runtime and embedded GUI. Regular combos were subsequently reported working.</li>
+<li>Exact per-hit counting remains unsupported. The GUI help and guides describe the actual limitation.</li>
+</ul>
+<h3 id="owner-protection-investigation">Owner protection investigation</h3>
+<ul>
+<li>Corrected GetTargetClass to recognize the owner and known friends before applying an inherited actor-ID cutoff. A Refuge owner ID below the cutoff reproduced the earlier classification failure.</li>
+<li>A focused test confirmed that the owner attacker enters the rescue list and the existing rescue branch can switch away from another enemy.</li>
+<li>Subsequent in-game testing still failed to protect the owner. This remains unresolved; the classification fix is not presented as a complete solution.</li>
+<li>Added throttled <code>[RESCUE CHECK]</code> logging with owner ID/HP, current state and target, monster target IDs, tactics, distances, and eligibility. The diagnostic version is included here.</li>
+</ul>
+<h3 id="healing-clarification">Healing clarification</h3>
+<ul>
+<li>Documented that Idle and Idle_low differ in priority; both retain HP, SP, and cooldown checks.</li>
+<li>A proposed configurable 15-second idle healing interval was cancelled before deployment. No extra interval was added.</li>
+<li>Healing triggers below its threshold and stops triggering at or above it. The server still chooses the actual Chaotic Heal recipient.</li>
+</ul>
+<h3 id="documentation-and-distribution">Documentation and distribution</h3>
+<ul>
+<li>Added an offline browser-readable manual and connected the GUI Documentation menu to it, with the existing PDF fallback retained.</li>
+<li>Added installation/update instructions, a complete browsable settings reference, explanations for every tab, a Blueprint programming guide, skill reference, and this changelog.</li>
+<li>Documented inherited controls whose runtime behavior is absent, narrower than their labels, or unverified.</li>
+<li>Clarified AutoSkillDelay: negative values are treated as 0 (no extra pause), and the remaining rhythm is controlled by skill cast/cooldown/SP checks.</li>
+<li>Prepared a flat ZIP for extraction directly into AI_sakray/USER_AI, containing the EXE and required Lua files.</li>
+<li>Replaced inherited skill/combo test presets with a clean profile: no enabled active skills, all displayed active levels 1, blank regular slots, combo systems off, and automatic skill/heal/buff toggles off.</li>
+<li>Removed the inherited sample friend entry from bundled defaults. Personal live settings, logs, backups, and Blueprint graphs are excluded.</li>
+</ul>
+<h3 id="existing-features-retained">Existing features retained</h3>
+<p>The property-grid settings UI, monster and PVP tactics, eight-slot regular combo framework, visual Blueprint editor, movement/kiting modes, friending, and legacy standby/berserk options existed in the project. This release documents and adapts them; it does not claim they were all newly built or fully validated.</p>
+<h3 id="validation-and-remaining-work">Validation and remaining work</h3>
+<p>The GUI builds for x86/.NET Framework 4.8 with four existing CS0108 warnings. Focused checks cover configuration round-trips, installation and actual Apply, skill/command ordering, and the reproduced owner-ID classification case. Lua 5.0 syntax checks adapt the pre-existing #BlueprintCombos expression in test input only; they do not prove complete server-client compatibility.</p>
+<p>Before a general stable release, confirm owner rescue in-game, test each Kimi type and outstanding skill metadata, and exercise the documented Blueprint paths. Automated command-level tests do not establish landed hits, server skill acceptance, or all in-game timing.</p>
+</section><section id="skills"><h1>Skill reference</h1><pre>==============================================================================
+Ward Kimi  (class ID 6001)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8005   Master Swap            5      Active / Utility                 HAMI_CASTLE  [LOYAL]
+8006   Bastion Renewal        5      Active / Self Buff               HAMI_DEFENCE
+8007   Living Bulwark         5      Passive                          HAMI_SKIN
+8033   Ward&#39;s Domain          5      Active / Protection Aura         MH_STEINWAND
+8039   Retaliation            10     Passive / Counter AoE            MH_MAGMA_FLOW
+8021   Taunt                  5      Active / Self AoE                MH_PAIN_KILLER
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+==============================================================================
+Occult Kimi  (class ID 6002)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8005   Master Swap            5      Active / Utility                 HAMI_CASTLE  [LOYAL]
+8014   Chaotic Heal           5      Active / Recovery                HVAN_CHAOTIC
+8024   Illusion of Breath     10     Active / Neutral Magic           MH_ERASER_CUTTER
+8034   Illusion of Light      5      Active / Neutral Magic AoE       MH_HEILIGE_STANGE  [LOYAL]
+8013   Chaotic Sanctuary      5      Active / Ground Support          HVAN_CAPRICE
+8015   Arcane Offering        5      Active / Support                 HVAN_INSTRUCT
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+==============================================================================
+Agile Kimi  (class ID 6003)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8005   Master Swap            5      Active / Utility                 HAMI_CASTLE  [LOYAL]
+8009   Illusion of Claw       10     Active / Melee                   HFLI_MOON
+8010   Enhanced Reflexes      5      Passive                          HFLI_FLEET
+8011   Second Wind            10     Passive                          HFLI_SPEED
+8012   Fade Away              1      Active / Utility                 HFLI_SBR44
+8036   Mirage Assault         5      Active / Targeted Melee          MH_TINDER_BREAKER
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+==============================================================================
+Raging Kimi  (class ID 6004)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8031   Illusion Crusher       5      Active / Physical                MH_STAHL_HORN
+8032   Blood Sweep            10     Active / Melee AoE               MH_GOLDENE_FERSE
+8035   Blood Hunger           10     Passive / Blood Sweep Modifier   MH_ANGRIFFS_MODUS
+8037   Predator&#39;s Focus       1      Passive                          MH_CBC
+8038   Blood Frenzy           5      Passive                          MH_EQC
+8040   Ironblood              5      Passive                          MH_GRANITIC_ARMOR
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+</pre></section></main></body></html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

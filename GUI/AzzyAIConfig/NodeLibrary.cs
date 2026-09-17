@@ -40,6 +40,21 @@ namespace AzzyAIConfig
                 if (string.Equals(t.Title, title, StringComparison.OrdinalIgnoreCase))
                     return t;
             }
+
+            // Existing blueprints used a few pre-catalog titles (for example
+            // "Warm Def" and "Illusion of Claws"). Resolve those by skill ID
+            // so loading a blueprint also upgrades it to the current name and
+            // metadata.
+            int skillId = KimiSkills.GetSkillId(title);
+            if (skillId != 0 || string.Equals(title, "(None)", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var t in all)
+                {
+                    if (t.Type == NodeType.Skill && t.Properties.ContainsKey("SkillID") &&
+                        Convert.ToInt32(t.Properties["SkillID"]) == skillId)
+                        return t;
+                }
+            }
             return null;
         }
 
@@ -53,31 +68,42 @@ namespace AzzyAIConfig
             Color supportColor = Color.FromArgb(20, 60, 20);
             Color supportHeader = Color.FromArgb(30, 100, 30);
 
-            // Add combat skills first (red group)
-            nodes.Add(CreateSkillNode("Illusion of Claws", 8009, combatHeader, combatColor));
-            nodes.Add(CreateSkillNode("Illusion of Breath", 8024, combatHeader, combatColor));
-            nodes.Add(CreateSkillNode("Illusion Crusher", 8031, combatHeader, combatColor));
-            nodes.Add(CreateSkillNode("Illusion of Light", 8034, combatHeader, combatColor));
-            nodes.Add(CreateSkillNode("Auto-Attack", -1, combatHeader, combatColor));
-            
-            // Add support skills second (green group)
-            nodes.Add(CreateSkillNode("Chaotic Heal", 8014, supportHeader, supportColor));
-            nodes.Add(CreateSkillNode("Warm Def", 8006, supportHeader, supportColor));
-            nodes.Add(CreateSkillNode("Body Double", 8022, supportHeader, supportColor));
-            nodes.Add(CreateSkillNode("Master Swap", 8005, supportHeader, supportColor));
+            // Auto-attack is a pseudo skill and remains available to every
+            // Kimi. Real cast nodes come exclusively from active catalog
+            // entries, which keeps passive skills out of the toolbox.
+            nodes.Add(CreateAutoAttackNode(combatHeader, combatColor));
+            foreach (var skill in KimiSkills.GetActiveDefinitions())
+            {
+                nodes.Add(CreateSkillNode(skill,
+                    skill.IsSupport ? supportHeader : combatHeader,
+                    skill.IsSupport ? supportColor : combatColor));
+            }
 
             return nodes;
         }
 
-        private static ComboNode CreateSkillNode(string name, int skillId, Color header, Color body)
+        private static ComboNode CreateAutoAttackNode(Color header, Color body)
+        {
+            return CreateSkillNode("Auto-Attack", -1, 1, "Enemy", false, header, body,
+                "Basic attack with no skill level or SP cost.");
+        }
+
+        private static ComboNode CreateSkillNode(KimiSkillDefinition skill, Color header, Color body)
+        {
+            return CreateSkillNode(skill.Name, skill.Id, skill.MaxLevel, skill.DefaultTarget,
+                skill.IsSupport, header, body, GetSkillDescription(skill));
+        }
+
+        private static ComboNode CreateSkillNode(string name, int skillId, int maxLevel,
+                                                 string defaultTarget, bool isSupport,
+                                                 Color header, Color body, string description)
         {
             var node = new ComboNode
             {
                 Type = NodeType.Skill,
-                Category = skillId == 8014 || skillId == 8006 || skillId == 8022 || skillId == 8005 ? 
-                          NodeCategory.SupportSkill : NodeCategory.OffensiveSkill,
+                Category = isSupport ? NodeCategory.SupportSkill : NodeCategory.OffensiveSkill,
                 Title = name,
-                Description = GetSkillDescription(name, skillId),
+                Description = description,
                 HeaderColor = header,
                 BodyColor = body,
                 Size = new Size(650, 90)
@@ -87,13 +113,15 @@ namespace AzzyAIConfig
             node.Properties["SkillID"] = skillId;
             if (skillId != -1)  // Regular skills get SkillLevel
             {
-                node.Properties["SkillLevel"] = 5;
+                node.Properties["SkillLevel"] = 1;
+                node.Properties["SkillMaxLevel"] = maxLevel;
                 node.Properties["RepeatCount"] = 1;
             }
             else  // Auto-Attack only gets RepeatCount
             {
                 node.Properties["RepeatCount"] = 1;
             }
+            node.Properties["TargetMode"] = string.IsNullOrEmpty(defaultTarget) ? "Enemy" : defaultTarget;
 
             // Input pins
             node.InputPins.Add(new NodePin 
@@ -142,28 +170,11 @@ namespace AzzyAIConfig
             return node;
         }
 
-        private static string GetSkillDescription(string name, int skillId)
+        private static string GetSkillDescription(KimiSkillDefinition skill)
         {
-            if (name == "Illusion of Claws")
-                return "NEXT: Set RepeatCount 2-3 for auto-attack chains. Connect to Delay node for spam timing (200-300ms). Best for Agile/Raging Kimi.";
-            else if (name == "Illusion of Breath")
-                return "NEXT: Combo with Claws for mixed damage. Use after Crusher to finish low-HP targets. Occult Kimi preferred.";
-            else if (name == "Illusion Crusher")
-                return "NEXT: Lead with this for burst, follow with Claws chain. Great in Chase phase. Requires Cordial intimacy.";
-            else if (name == "Illusion of Light")
-                return "NEXT: Gate with 'Mob Count >= 2' condition to trigger only on multiple enemies. Add Delay 1000-2000ms to prevent overkill. Requires Cordial intimacy.";
-            else if (name == "Chaotic Heal")
-                return "NEXT: Gate with 'Kimi HP <= 50%' to trigger emergency healing. Connect output to another skill for recovery rotation.";
-            else if (name == "Warm Def")
-                return "NEXT: Pair with healing node. Use in sequences after damage phases. Good for tank builds (Ward Kimi).";
-            else if (name == "Body Double")
-                return "NEXT: Gate with 'Owner HP <= 30%' for emergency saves. Requires Loyal intimacy. Use as fallback, not primary.";
-            else if (name == "Master Swap")
-                return "NEXT: Use in Chase phase combos for tactical repositioning. Not required for most builds.";
-            else if (name == "Auto-Attack")
-                return "NEXT: Use as filler between skill casts or delay nodes. No SP cost. Good for sustained offense chains.";
-            else
-                return $"Skill ID: {skillId} - Connect to Delay or Condition nodes to build execution chains.";
+            return skill.Name + " (" + skill.Id + ") - " + skill.Type +
+                   ". Default target: " + skill.DefaultTarget +
+                   ". Valid levels: 1-" + skill.MaxLevel + ".";
         }
 
         private static List<ComboNode> GetConditionNodes()

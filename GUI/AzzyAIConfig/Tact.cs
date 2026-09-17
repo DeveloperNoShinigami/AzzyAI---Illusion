@@ -20,6 +20,7 @@ namespace AzzyAIConfig
 
     enum TACT_BASIC : sbyte
     {
+        TACT_TANK_GATHER = -3, //Gather monsters before waiting for them to be killed
         TACT_TANKMOB = -2, //Tank until enough monsters to use AoE on them
         TACT_TANK = -1,	//(Hit monster once, and then hold it until something kills it)
         TACT_IGNORE = 0,	//(Do not attack the monster, at all)

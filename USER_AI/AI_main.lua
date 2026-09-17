@@ -11,13 +11,12 @@ ResCmdList			= List.new()
 -- As of dev 15, global variables are now in Const_.lua
 
 AutoSkillCooldown	= {}
-AutoSkillCooldown[S_ILLUSION_OF_CLAWS]=0
-AutoSkillCooldown[S_ILLUSION_CRUSHER]=0
-AutoSkillCooldown[S_CHAOTIC_HEAL]=0
-AutoSkillCooldown[S_WARM_DEF]=0
-AutoSkillCooldown[S_BODY_DOUBLE]=0
-AutoSkillCooldown[S_ILLUSION_OF_LIGHT]=0
-AutoSkillCooldown[S_ILLUSION_OF_BREATH]=0 	
+for _, kimiSkillId in ipairs(KimiActiveSkillIds or {
+	S_ILLUSION_OF_CLAWS, S_ILLUSION_CRUSHER, S_CHAOTIC_HEAL, S_WARM_DEF,
+	S_BODY_DOUBLE, S_ILLUSION_OF_LIGHT, S_ILLUSION_OF_BREATH
+}) do
+	AutoSkillCooldown[kimiSkillId] = 0
+end
 
 -----------Combo System State Variables---------
 ComboState = {
@@ -528,6 +527,9 @@ local function HandleSkillNode(node, myid, enemy)
 
 	-- Auto-attack handling
 	if skillid == -1 then
+		if ComboTacticLevel(-1,1,myid,target) == 0 then
+			return GetNextNodeId(BlueprintRuntime.active,node.id,"then") or 0
+		end
 		local attackRange = GetV(V_ATTACKRANGE, myid) or 1
 		local dist = GetDistanceA(myid, target)
 		if dist > attackRange then
@@ -585,10 +587,16 @@ local function HandleSkillNode(node, myid, enemy)
 			return -1  -- Stay on this node for next repeat
 		end
 	else
-		local skilllevel = node.level or 1
-		local configuredLevel = GetConfiguredSkillLevel(skillid)
-		if configuredLevel ~= nil then
-			skilllevel = configuredLevel
+		local kimiMeta = KimiSkillMetadata and KimiSkillMetadata[skillid]
+		local skilllevel
+		if kimiMeta then
+			skilllevel = GetKimiSkillLevel(skillid, node.level or 1, myid)
+		else
+			skilllevel = node.level or 1
+			local configuredLevel = GetConfiguredSkillLevel(skillid)
+			if configuredLevel ~= nil then
+				skilllevel = configuredLevel
+			end
 		end
 		if skilllevel == 0 then
 			TraceAI("[BP_COMBO] Skill "..skillid.." disabled by configuration; advancing")
@@ -599,12 +607,31 @@ local function HandleSkillNode(node, myid, enemy)
 			end
 			return nextId
 		end
+		if kimiMeta then
+			local canCast, resolvedLevel, reason = KimiSkillCanCast(skillid, skilllevel, myid)
+			if not canCast and reason ~= "insufficient_sp" and reason ~= "no_sp" then
+				TraceAI("[BP_COMBO] Kimi skill "..skillid.." rejected: "..tostring(reason).."; advancing")
+				BlueprintRuntime.nodeState[node.id] = nil
+				local nextId = GetNextNodeId(BlueprintRuntime.active, node.id, "then")
+				if nextId == nil then return 0 end
+				return nextId
+			end
+			if canCast then skilllevel = resolvedLevel end
+		end
 		if AutoSkillCooldown[skillid] and GetTick() < AutoSkillCooldown[skillid] then
 			TraceAI("[BP_COMBO] Skill "..skillid.." on cooldown - waiting")
 			return -1  -- Stay on this node
 		end
+		local tacticLevel = ComboTacticLevel(skillid,skilllevel,myid,target)
+		if tacticLevel == nil then return -1 end
+		if tacticLevel == 0 then
+			BlueprintRuntime.nodeState[node.id] = nil
+			return GetNextNodeId(BlueprintRuntime.active,node.id,"then") or 0
+		end
+		skilllevel = tacticLevel
+		if PositionComboSkill(myid,target,skillid,skilllevel) then return -1 end
 		-- SP check
-		local spcost = GetSkillInfo(skillid, 3, skilllevel) or 0
+		local spcost = kimiMeta and GetKimiSkillCost(skillid, skilllevel, myid) or (GetSkillInfo(skillid, 3, skilllevel) or 0)
 		if GetV(V_SP, myid) < spcost then
 			TraceAI("[BP_COMBO] Insufficient SP for skill "..skillid)
 			-- Track failures to prevent infinite stuck combos
@@ -630,7 +657,10 @@ local function HandleSkillNode(node, myid, enemy)
 		local skipRangeCheck = false
 		
 		-- Chaotic Heal (8014), Warm Def (8006), Body Double (8022) are self/ally skills with range 0 - they work regardless of distance
-		if skillid == S_CHAOTIC_HEAL or skillid == S_WARM_DEF or skillid == S_BODY_DOUBLE then
+		if kimiMeta and (kimiMeta.targetMode == 0 or kimiMeta.targetKind == "owner" or kimiMeta.targetKind == "ground") then
+			skipRangeCheck = true
+			TraceAI("[BP_COMBO] Kimi support skill "..skillid.." - skipping range check")
+		elseif skillid == S_CHAOTIC_HEAL or skillid == S_WARM_DEF or skillid == S_BODY_DOUBLE then
 			skipRangeCheck = true
 			TraceAI("[BP_COMBO] Skill "..skillid.." is self/ally skill - skipping range check")
 		end
@@ -666,8 +696,14 @@ local function HandleSkillNode(node, myid, enemy)
 				return -1  -- Stay on this node
 			end
 		end
-		DoSkill(skillid, skilllevel, target)
-		local cd = GetSkillInfo(skillid, 9, skilllevel) or 0
+		local castTarget = kimiMeta and GetKimiSkillTarget(skillid, target, myid) or target
+		local castResult = DoSkill(skillid, skilllevel, castTarget)
+		if castResult == 0 then
+			TraceAI("[BP_COMBO] Skill "..skillid.." was rejected at dispatch; waiting")
+			return -1
+		end
+		RecordComboTacticCast(target,skillid)
+		local cd = kimiMeta and GetKimiSkillReuseDelay(skillid, skilllevel) or (GetSkillInfo(skillid, 9, skilllevel) or 0)
 		if cd > 0 then
 			AutoSkillCooldown[skillid] = GetTick() + cd
 		end
@@ -923,10 +959,25 @@ end
 
 function doInit(myid)
 	local logstring="Checking config..."
-	-- Initialize Kimi type based on homon type
-	KIMITYPE = GetV(V_HOMUNTYPE, MyID)
-	if KIMITYPE == 0 or KIMITYPE == nil then
-		KIMITYPE = OCCULT  -- Default to Occult if not found
+	-- Initialize Kimi type; server builds expose either 1..4 or 6001..6004.
+	-- Unknown values stay invalid so a Kimi skill cannot be cast as Occult.
+	KIMITYPE = GetKimiType(MyID) or 0
+	-- GUI profiles keep each Kimi's standard combo independent. Older configs
+	-- without profiles continue using their existing global combo settings.
+	local comboProfile = type(KimiComboProfiles) == "table" and KimiComboProfiles[KIMITYPE]
+	if type(comboProfile) == "table" then
+		local comboKeys = {"ComboEnabled", "ComboRunDuringChase", "ComboRunDuringAttack", "ComboRunDuringIdle", "ComboResetOnTargetChange", "ComboAutoAttackDelay", "UseAttackSkill", "AttackSkillReserveSP", "AutoSkillDelay", "AutoMobMode", "AutoMobCount", "UseSkillOnly", "AoEMaximizeTargets", "AoEReserveSP", "AoEFixedLevel", "HealOwnerHP", "HealSelfHP", "UseAutoHeal", "UseChaoticHeal", "ChaoticHealOwnerHP", "ChaoticHealKimiHP", "UseBodyDouble", "UseAutoBD", "BodyDoubleCooldown", "BastionRenewalCooldown", "BodyDoubleOwnerHP", "UseWarmDef", "WarmDefCooldown", "WarmDefHP", "UseMasterSwap", "MasterSwapOwnerHP", "MasterSwapCooldown"}
+		for _, key in ipairs(comboKeys) do
+			if type(comboProfile[key]) == "number" then _G[key] = comboProfile[key] end
+		end
+		if comboProfile.UseAutoBD == nil and type(comboProfile.UseBodyDouble) == "number" then UseAutoBD = comboProfile.UseBodyDouble end
+		if type(comboProfile.OnlyAOE) == "number" then onlyAOE = comboProfile.OnlyAOE end
+        for slot = 1, 8 do
+			for _, suffix in ipairs({"_SkillID", "_ComboCount"}) do
+				local key = "ComboSlot"..slot..suffix
+				if type(comboProfile[key]) == "number" then _G[key] = comboProfile[key] end
+			end
+		end
 	end
 	if (UseAttackSkill==0 and UseSkillOnly==1) then
 		UseSkillOnly = 0
@@ -1008,47 +1059,151 @@ end
 
 -- Map user-config skill level overrides (from H_Config.lua) by skill ID
 function GetConfiguredSkillLevel(skillid)
-	if skillid == S_ILLUSION_OF_LIGHT then
-		return illusionOfLightLevel
-	elseif skillid == S_ILLUSION_OF_BREATH then
-		return illusionOfBreathLevel
-	elseif skillid == S_ILLUSION_CRUSHER then
-		return illusionOfCrusherLevel
-	elseif skillid == S_ILLUSION_OF_CLAWS then
-		return illusionOfClawsLevel
-	elseif skillid == S_CHAOTIC_HEAL then
-		return chaoticHealLevel
-	elseif skillid == S_BODY_DOUBLE then
-		return bodyDoubleLevel
-	elseif skillid == S_WARM_DEF then
-		return warmDefLevel
-	end
-	return nil
+	return GetKimiConfiguredSkillLevel(skillid)
 end
 
 -- Configuration-based gating for combo skill execution
+-- Monster tactics also govern explicitly ordered combo actions.
+local ComboTacticTarget, ComboTacticCasts = 0, 0
+function ComboTacticLevel(skillid, level, myid, target)
+	if not target or target == 0 or IsMonster(target) ~= 1 then return level end
+	local meta = KimiSkillMetadata and KimiSkillMetadata[skillid]
+	if meta and (meta.targetKind == "owner" or (meta.targetMode == 0 and not SkillAOEInfo[skillid])) then return level end
+	if ComboTacticTarget ~= target then ComboTacticTarget, ComboTacticCasts = target, 0 end
+	if GetTact(TACT_BASIC,target) <= 0 and GetTact(TACT_BASIC,target) ~= TACT_TANK_GATHER then return 0 end
+	if skillid == -1 then return level end
+	local count = GetTact(TACT_SKILL,target)
+	if count == 0 or (count ~= SKILL_ALWAYS and ComboTacticCasts >= (count < 0 and 1 or count)) then return 0 end
+	if count < 0 then level = math.min(level, -count) end
+	local class = GetTact(TACT_SKILLCLASS,target)
+	local aoe = SkillAOEInfo[skillid] ~= nil
+	if class == CLASS_MOB and not aoe then return 0 end
+	if class ~= CLASS_BOTH and class ~= CLASS_OLD and class ~= CLASS_MOB and class ~= CLASS_MIN_OLD
+		and class ~= CLASS_COMBO_1 and class ~= CLASS_COMBO_2 then return 0 end
+	local reserve = GetTact(TACT_SP,target)
+	if reserve == nil or reserve < 0 then reserve = AttackSkillReserveSP or 0 end
+	local cost = meta and GetKimiSkillCost(skillid,level,myid) or (GetSkillInfo(skillid,3,level) or 0)
+	if GetV(V_SP,myid) < cost + reserve then return nil end -- temporary: retain this step
+	return level
+end
+
+function RecordComboTacticCast(target,skill)
+	local meta = KimiSkillMetadata and KimiSkillMetadata[skill]
+	if meta and (meta.targetKind == "owner" or (meta.targetMode == 0 and not SkillAOEInfo[skill])) then return end
+	if target == ComboTacticTarget then ComboTacticCasts = ComboTacticCasts + 1 end
+end
+
+-- Resolve the current action before generic chase/attack movement runs.
+function GetComboRangeSkill(myid)
+	local skill, level
+	if BlueprintComboEnabled == 1 and BlueprintRuntime.active then
+		local node = BlueprintRuntime.active.nodeById[BlueprintRuntime.currentNodeId]
+		if node then skill, level = ResolveSkillId(node.skill), node.level end
+	elseif ComboEnabled == 1 and ((MyState == CHASE_ST and ComboRunDuringChase == 1) or (MyState == ATTACK_ST and ComboRunDuringAttack == 1)) then
+		skill = GetComboSlotInfo(math.max(1,ComboState.currentSlot or 1))
+	end
+	if skill and skill > 0 and KimiSkillMetadata and KimiSkillMetadata[skill] then
+		local meta = KimiSkillMetadata[skill]
+		if meta.targetKind ~= "enemy" and skill ~= S_TAUNT then return nil,nil end
+		level = GetKimiSkillLevel(skill,level,myid)
+		if level > 0 then return skill, level end
+	elseif skill == -1 then return 0, 1 end
+	return nil, nil
+end
+
+-- Snipe holds ranged skills near their cast limit; kiting uses the same limit.
+-- Move one cell at a time so a large KiteStep cannot overshoot casting range.
+local ComboRetreatAttempt = nil
+function PositionComboSkill(myid,target,skill,level)
+	if skill ~= S_ILLUSION_OF_BREATH and skill ~= S_ILLUSION_OF_LIGHT then return false end
+	if not target or target == 0 or IsMonster(target) ~= 1 then return false end
+	if GetV(V_MOTION,myid) == MOTION_CASTING or GetTick() < (AutoSkillCastTimeout or 0) then return false end
+	local range = GetSkillInfo(skill,2,level)
+	local distance = GetDistanceA(myid,target)
+	local desired = range
+	local kite = GetTact(TACT_KITE,target)
+	local victim = GetV(V_TARGET,target)
+	local threatened = victim == myid or victim == GetV(V_OWNER,myid) or IsFriend(victim) == 1
+	local sniping = GetTact(TACT_SNIPE,target) == SNIPE_OK
+	local kiting = KiteMonsters == 1 and kite ~= KITE_NEVER and (kite ~= KITE_REACT or threatened)
+	if not sniping then desired = math.min(range, threatened and KiteThreshold or KiteParanoidThreshold) end
+	if distance <= range and (not sniping and not kiting or distance >= desired-1) then return false end
+	local x,y = GetV(V_POSITION,myid)
+	local tx,ty = GetV(V_POSITION,target)
+	local attempt = ComboRetreatAttempt
+	if distance <= range and attempt and attempt.target == target and attempt.x == x and attempt.y == y and attempt.tx == tx and attempt.ty == ty then
+		-- Allow a movement command time to take effect, without reissuing it.
+		-- If neither actor moved, stop retreating and let an in-range cast proceed.
+		if GetTick() - attempt.tick < 500 then return true end
+		if not attempt.blocked then
+			attempt.blocked = true
+			TraceAI("[KITE BLOCKED] No retreat progress; allowing in-range cast from "..x..","..y)
+		end
+		return false
+	end
+	ComboRetreatAttempt = nil
+	local owner = GetV(V_OWNER,myid)
+	local ox,oy = GetV(V_POSITION,owner)
+	local bounds = math.min(GetMoveBounds(),KiteBounds or GetMoveBounds())
+	local best, bx, by = math.abs(distance-desired), nil, nil
+	for dx=-1,1 do
+		for dy=-1,1 do
+			local nx,ny=x+dx,y+dy
+			local d=GetDistanceAP(target,nx,ny)
+			local score=math.abs(d-desired)
+			if NavigationStep(x,y,nx,ny) and NavigationSight(nx,ny,tx,ty) and math.max(math.abs(nx-ox),math.abs(ny-oy)) <= bounds and score < best and (distance > range or d <= range) then
+				best,bx,by=score,nx,ny
+			end
+		end
+	end
+	if bx then
+		if distance <= range then
+			ComboRetreatAttempt = {target=target,x=x,y=y,tx=tx,ty=ty,tick=GetTick()}
+		end
+		Move(myid,bx,by)
+		return true
+	end
+	return false
+end
+
 function CanUseComboSkill(skillid, level, myid, target)
-	-- onlyAOE: If enabled, allow only Illusion of Light in combos (user preference)
-	if onlyAOE == 1 then
-		if skillid ~= S_ILLUSION_OF_LIGHT then
+	-- AoE-only restricts offensive skills, not support casts.
+	local meta = KimiSkillMetadata and KimiSkillMetadata[skillid]
+	if onlyAOE == 1 and GetKimiType(myid) ~= AGILE and meta
+		and (meta.targetKind == "enemy" or meta.targetKind == "ground")
+		and not (SkillAOEInfo and SkillAOEInfo[skillid]) then return false end
+
+	-- Every catalogued Kimi skill shares this gate. It rejects disabled,
+	-- wrong-type, passive, over-level, and unaffordable casts before a combo
+	-- can consume a slot. Non-Kimi legacy/merc skills retain their old path.
+	if KimiSkillMetadata and KimiSkillMetadata[skillid] then
+		local canCast, resolvedLevel, reason = KimiSkillCanCast(skillid, level, myid)
+		if not canCast then
+			TraceAI("[COMBO] Kimi skill "..tostring(skillid).." rejected: "..tostring(reason))
 			return false
 		end
+		level = resolvedLevel
+	end
+
+	if AutoSkillCooldown[skillid] and GetTick() < AutoSkillCooldown[skillid] then
+		TraceAI("[COMBO] Skill "..tostring(skillid).." on cooldown")
+		return false
 	end
 
 	-- For combo execution, respect cooldowns but NOT the UseX flags
-	-- UseX flags (UseChaoticHeal, UseBodyDouble, UseWarmDef) are for AUTO-casting outside combos
+	-- Automatic switches (UseChaoticHeal, UseAutoBD) are for AUTO-casting outside combos
 	-- In combo context, if a skill is in the rotation, it should execute
 	
 	-- Warm Defense: Check cooldown only (UseWarmDef is for auto-buff, not combos)
-	if skillid == S_WARM_DEF then
+	if skillid == S_WARM_DEF or skillid == S_WARD_DOMAIN then
 		if GuardTimeout ~= -1 and GetTick() < GuardTimeout then 
-			TraceAI("[COMBO] Warm Def on cooldown, advancing slot")
+			TraceAI("[COMBO] Defensive Kimi skill on cooldown, advancing slot")
 			return false 
 		end
 		return true
 	end
 
-	-- Body Double: Check cooldown only (UseBodyDouble is for auto-buff, not combos)
+	-- Body Double: Check cooldown only (UseAutoBD is for automatic casts, not combos)
 	if skillid == S_BODY_DOUBLE then
 		if QuickenTimeout ~= -1 and GetTick() < QuickenTimeout then 
 			TraceAI("[COMBO] Body Double on cooldown, advancing slot")
@@ -1057,23 +1212,8 @@ function CanUseComboSkill(skillid, level, myid, target)
 		return true
 	end
 
-	-- Chaotic Heal: Always allow in combos (UseChaoticHeal is for auto-heal, not combos)
-	if skillid == S_CHAOTIC_HEAL then
-		return true
-	end
-
-	-- AoE/Offensive skills: Always allow in combos
-	-- Illusion of Light (8034), Illusion Crusher (8031), Illusion of Breath (8024), Illusion of Claws (8009), Master Swap (8005 placeholder)
-	-- Auto-casting of these is controlled separately via UseAttackSkill/UseHomunSSkillChase flags
-	if skillid == S_ILLUSION_OF_LIGHT or 
-	   skillid == S_ILLUSION_CRUSHER or 
-	   skillid == S_ILLUSION_OF_BREATH or 
-	   skillid == S_ILLUSION_OF_CLAWS or 
-	   skillid == S_MASTER_SWAP then
-		return true
-	end
-
-	-- All other skills: Allow in combos (SP/range/level checked elsewhere in ExecuteCombo)
+	-- UseX flags are for automatic paths; an explicitly selected combo skill is
+	-- allowed after the shared gate above.
 	return true
 end
 
@@ -1123,6 +1263,8 @@ end
 
 -- Advance to next slot in combo (handles wrapping from 4 -> 1)
 function AdvanceComboSlot()
+	ComboState.lastActionTime = nil
+	ComboState.lastActionDelay = nil
 	local oldSlot = ComboState.currentSlot
 	if ComboState.currentSlot < 8 then
 		ComboState.currentSlot = ComboState.currentSlot + 1
@@ -1147,7 +1289,7 @@ end
 
 -- Check if current state matches combo execution context
 function CanExecuteComboInState()
-	if MyState == ATTACK_ST and ComboRunDuringAttack == 1 then
+	if (MyState == ATTACK_ST or (MyState == TANK_ST and GetTact(TACT_BASIC,MyEnemy) == TACT_TANK_GATHER)) and ComboRunDuringAttack == 1 then
 		return true
 	-- CHASE_ST removed - combo should NOT run during chase, only during attack
 	-- Chase state focuses on movement; combo executes once in attack range
@@ -1168,8 +1310,10 @@ function ExecuteCombo(myid, target)
 	-- Get current slot skill info EARLY to decide target/validation rules
 	local skillid, combocount = GetComboSlotInfo(ComboState.currentSlot)
 
-	-- Support skills can be cast without a monster target; offensive ones require a valid enemy
-	local isSupportSkill = (skillid == S_CHAOTIC_HEAL or skillid == S_BODY_DOUBLE or skillid == S_WARM_DEF)
+	-- Catalog metadata determines whether a combo skill needs an enemy target.
+	local kimiMeta = KimiSkillMetadata and KimiSkillMetadata[skillid]
+	local isSupportSkill = kimiMeta and (kimiMeta.targetMode == 0 or kimiMeta.targetKind == "owner" or kimiMeta.targetKind == "ground")
+		or (skillid == S_CHAOTIC_HEAL or skillid == S_BODY_DOUBLE or skillid == S_WARM_DEF)
 	if not isSupportSkill then
 		-- Ensure target is valid before attempting any offensive combo action
 		if target == 0 or IsMonster(target) ~= 1 then
@@ -1196,13 +1340,14 @@ function ExecuteCombo(myid, target)
 	-- Combo timing is managed by ComboState.lastActionTime; do not block on global AutoSkillTimeout
 	
 	-- Skip if skill not configured (0 = disabled)
-	if skillid == 0 then
+	if skillid == 0 or combocount <= 0 then
 		AdvanceComboSlot()
 		return
 	end
 
 	-- Auto-attack slot support: skillid == -1 triggers basic attack instead of skill
 	if skillid == -1 then
+		if ComboTacticLevel(-1,1,myid,target) == 0 then AdvanceComboSlot(); return end
 		-- For auto-attacks, verify we're in melee range (1 cell = ~5 units)
 		-- This prevents spamming attacks when out of range
 		local distance = GetDistanceA(myid, target)
@@ -1236,6 +1381,16 @@ function ExecuteCombo(myid, target)
 		end
 	end
 	
+	-- Complete an issued action before its changed SP/cooldown can block it.
+	if ComboState.lastActionTime then
+		if GetTick() < ComboState.lastActionTime + (ComboState.lastActionDelay or ComboSkillCastDelay or 500) then return end
+		ComboState.lastActionTime = nil
+		ComboState.lastActionDelay = nil
+		ComboState.comboCountRemaining = ComboState.comboCountRemaining - 1
+		if ComboState.comboCountRemaining <= 0 then AdvanceComboSlot() end
+		return
+	end
+
 	-- Check if this specific skill is on cooldown
 	if AutoSkillCooldown[skillid] and GetTick() < AutoSkillCooldown[skillid] then
 		local cooldownLeft = math.ceil((AutoSkillCooldown[skillid] - GetTick()) / 1000)
@@ -1243,18 +1398,33 @@ function ExecuteCombo(myid, target)
 		return
 	end
 	
-	-- Get skill level (prefer user configuration overrides from H_Config.lua)
-	local skilllevel = 0
-	if KIMITYPE and SkillList[KIMITYPE] and SkillList[KIMITYPE][skillid] then
-		skilllevel = SkillList[KIMITYPE][skillid]
-	end
-	local configuredLevel = GetConfiguredSkillLevel(skillid)
-	if configuredLevel ~= nil then
-		skilllevel = configuredLevel
+	-- Resolve through the same type/active/configured/max gate used by DoSkill.
+	local skilllevel
+	if kimiMeta then
+		skilllevel = GetKimiSkillLevel(skillid, nil, myid)
+	else
+		skilllevel = 0
+		if KIMITYPE and SkillList[KIMITYPE] and SkillList[KIMITYPE][skillid] then
+			skilllevel = SkillList[KIMITYPE][skillid]
+		end
+		local configuredLevel = GetConfiguredSkillLevel(skillid)
+		if configuredLevel ~= nil then skilllevel = configuredLevel end
 	end
 	if skilllevel == 0 then
 		TraceAI("[COMBO CONFIG] Skill "..skillid.." disabled by configuration - advancing slot")
 		AdvanceComboSlot()
+		return
+	end
+
+	local tacticLevel = ComboTacticLevel(skillid,skilllevel,myid,target)
+	if tacticLevel == nil then return end
+	if tacticLevel == 0 then AdvanceComboSlot(); return end
+	skilllevel = tacticLevel
+	if PositionComboSkill(myid,target,skillid,skilllevel) then return end
+	-- Temporary SP shortages retain this slot and preserve combo order.
+	local requiredSP = kimiMeta and GetKimiSkillCost(skillid, skilllevel, myid) or GetSkillInfo(skillid, 3, skilllevel)
+	if GetV(V_SP, myid) < requiredSP or (kimiMeta and kimiMeta.partialCost and GetV(V_SP, myid) <= 0) then
+		TraceAI("[COMBO SP] Waiting for SP in slot "..ComboState.currentSlot)
 		return
 	end
 
@@ -1266,23 +1436,18 @@ function ExecuteCombo(myid, target)
 	end
 	
 	-- Choose appropriate cast target for support vs offensive skills
-	local castTarget = target
-	if skillid == S_CHAOTIC_HEAL or skillid == S_WARM_DEF then
-		castTarget = myid
-	elseif skillid == S_BODY_DOUBLE then
-		castTarget = GetV(V_OWNER, myid)
-	end
+	local castTarget = kimiMeta and GetKimiSkillTarget(skillid, target, myid) or target
 
 	-- Get skill's attack range and check if we're in range (use castTarget)
 	local skillRange = GetSkillInfo(skillid, 2, skilllevel) or 1
 	local distance = GetDistanceA(myid, castTarget)
-	if distance > skillRange then
+	if not (kimiMeta and (kimiMeta.targetMode == 0 or kimiMeta.targetKind == "owner" or kimiMeta.targetKind == "ground")) and distance > skillRange then
 		TraceAI("[COMBO SKILL] Out of range (dist: "..distance..", skill range: "..skillRange..") - waiting before casting")
 		return  -- Don't advance, wait until in range
 	end
 	
 	-- Check if we have enough SP to cast
-	local spcost = GetSkillInfo(skillid, 3, skilllevel)
+	local spcost = kimiMeta and GetKimiSkillCost(skillid, skilllevel, myid) or GetSkillInfo(skillid, 3, skilllevel)
 	local currentSP = GetV(V_SP, myid)
 	local maxSP = GetV(V_MAXSP, myid)
 	if currentSP < spcost then
@@ -1290,74 +1455,27 @@ function ExecuteCombo(myid, target)
 		return
 	end
 	
-	-- Check if we already issued a skill command
-	if ComboState.lastActionTime then
-		-- Check if skill is instant-cast (cast time = 0)
-		local castTime = GetSkillInfo(skillid, 6, skilllevel) or 0
-		local isInstantCast = (castTime == 0)
-		
-		if isInstantCast then
-			-- Instant-cast skills don't have MOTION_CASTING - just wait for fixed delay
-			if GetTick() < ComboState.lastActionTime + (ComboSkillCastDelay or 500) then
-				return  -- Still in delay
-			else
-				-- Delay complete - advance combo
-				ComboState.comboCountRemaining = ComboState.comboCountRemaining - 1
-				TraceAI("[COMBO CAST] Instant-cast skill delay complete - advancing")
-				if ComboState.comboCountRemaining <= 0 then
-					AdvanceComboSlot()
-				else
-					TraceAI("[COMBO CAST] Continuing - "..ComboState.comboCountRemaining.." more casts in this slot")
-				end
-				ComboState.lastActionTime = nil
-				return
-			end
-		else
-			-- Skill with cast time - wait for casting motion to start or complete
-			if GetV(V_MOTION, myid) == MOTION_CASTING or GetV(V_MOTION, myid) == MOTION_SKILL then
-				-- Casting started! Decrement counter now that we confirmed it cast
-				ComboState.comboCountRemaining = ComboState.comboCountRemaining - 1
-				-- Now wait for skill delay before advancing
-				if GetTick() < ComboState.lastActionTime + (ComboSkillCastDelay or 500) then
-					TraceAI("[COMBO CAST] Skill casting in progress...")
-					return
-				else
-					TraceAI("[COMBO CAST] Skill delay complete - advancing")
-					if ComboState.comboCountRemaining <= 0 then
-						AdvanceComboSlot()
-					else
-						TraceAI("[COMBO CAST] Continuing - "..ComboState.comboCountRemaining.." more casts in this slot")
-					end
-					ComboState.lastActionTime = nil
-					return
-				end
-			elseif GetTick() < ComboState.lastActionTime + 1000 then
-				-- Still waiting for casting to start (give it up to 1 second)
-				return
-			else
-				-- Skill failed to cast within 1 second, reset and try again
-				TraceAI("[COMBO CAST] Skill failed to cast, resetting action timer")
-				ComboState.lastActionTime = nil
-				return
-			end
-		end
-	else
 		-- First time issuing skill - do NOT decrement counter yet
-		TraceAI("[COMBO CAST] Slot "..ComboState.currentSlot.." | Skill: "..skillid.." Lv."..skilllevel.." | SP: "..spcost.." | Target: "..castTarget.." | Remaining: "..ComboState.comboCountRemaining.."/"..combocount)
-		DoSkill(skillid, skilllevel, castTarget)
+		TraceAI("[COMBO CAST] Slot "..ComboState.currentSlot.." | Skill: "..skillid.." Lv."..skilllevel.." | SP: "..spcost.." | Target: "..tostring(castTarget).." | Remaining: "..ComboState.comboCountRemaining.."/"..combocount)
+		local castResult = DoSkill(skillid, skilllevel, castTarget)
+		if castResult == 0 then
+			TraceAI("[COMBO CAST] Skill "..skillid.." was rejected at dispatch; retaining slot")
+			return
+		end
 		ComboState.lastActionTime = GetTick()
+		ComboState.lastActionDelay = math.max(ComboSkillCastDelay or 500, (AutoSkillCastTimeout or GetTick()) - GetTick())
+		RecordComboTacticCast(target,skillid)
 		-- Update relevant cooldown trackers for combo-cast buffs to avoid immediate recast
-		if skillid == S_WARM_DEF then
-			local cd = GetSkillInfo(skillid, 9, skilllevel) or 500
-			GuardTimeout = GetTick() + cd + (AutoSkillCastTimeout or 500)
+		if skillid == S_WARM_DEF or skillid == S_WARD_DOMAIN then
+			local cd = kimiMeta and GetKimiSkillReuseDelay(skillid, skilllevel) or (GetSkillInfo(skillid, 9, skilllevel) or 500)
+			GuardTimeout = (AutoSkillCastTimeout or GetTick()) + cd
 			UpdateTimeoutFile()
 		elseif skillid == S_BODY_DOUBLE then
-			local cd = GetSkillInfo(skillid, 9, skilllevel) or 500
-			QuickenTimeout = GetTick() + cd + (AutoSkillCastTimeout or 500)
+			local cd = kimiMeta and GetKimiSkillReuseDelay(skillid, skilllevel) or (GetSkillInfo(skillid, 9, skilllevel) or 500)
+			QuickenTimeout = (AutoSkillCastTimeout or GetTick()) + cd
 			UpdateTimeoutFile()
 		end
 		return
-	end
 end
 
 --########################################
@@ -1394,7 +1512,7 @@ end
 
 function	OnMOVE_CMD (x,y)
 	TraceAI ("OnMOVE_CMD")
-	if GetDistanceAPR(GetV(V_OWNER,MyID),x,y) > 15 or x==0 or y==0 then -- Bogus move command
+	if GetDistanceAPR(GetV(V_OWNER,MyID),x,y) > GetMoveBounds() or x==0 or y==0 then -- Bogus move command
 		local ox,oy=GetV(V_POSITION,GetV(V_OWNER,MyID))
 		logappend("AAI_ERROR","move command to invalid location "..formatpos(x,y).." owner pos "..formatpos(ox,oy))
 		TraceAI("OnMOVE_CMD - Command disregarded; invalid location logged")
@@ -1528,16 +1646,10 @@ function	OnSKILL_OBJECT_CMD (level,skill,id)
 	MySkill = skill
 	MyEnemy = id
 
-	if IsMonster(id)==1 and SuperPassive~=1 then
-		BypassKSProtect=1
-		if (UseBerserkSkill==1) then
-			BerserkMode=1
-		end
-		MyState = CHASE_ST
-		OnCHASE_ST()
-	else
-		MyState = SKILL_OBJECT_CMD_ST
-	end
+    -- Explicit skill commands must not enter combo or opportunistic selection.
+    if IsMonster(id)==1 then BypassKSProtect=1 end
+    MyState = SKILL_OBJECT_CMD_ST
+
 end
 
 
@@ -1679,6 +1791,7 @@ function	OnIDLE_ST ()
 		if (object ~= 0) then							-- MYOWNER_ATTACKED_IN
 			MyState = CHASE_ST
 			MyEnemy = object
+			ReturnAfterKill = false
 			TraceAI ("IDLE_ST -> CHASE_ST : MYOWNER_ATTACKED_IN")
 			if (FastChangeCount < FastChangeLimit and FastChange_I2C ==1) then
 				OnCHASE_ST()
@@ -1690,21 +1803,32 @@ function	OnIDLE_ST ()
 		else
 			aggro=0
 		end
-		object=SelectEnemy(GetEnemyList(MyID,aggro))
+		object=SelectEnemy(GetEnemyList(MyID,aggro),nil,OpportunisticTargeting==1)
 		if object~=0 then
 			MyState = CHASE_ST
 			MyEnemy = object
+			ReturnAfterKill = false
 			TraceAI ("IDLE_ST -> CHASE_ST : ATTACKED_IN")
 			if (FastChangeCount < FastChangeLimit and FastChange_I2C ==1) then
 				return OnCHASE_ST()
 			end
 			return	
 		end
+		-- Resume an already collected group without requiring another untagged mob.
+		if aggro == 1 then
+			for id,_ in pairs(Targets) do
+				if GetTact(TACT_BASIC,id) == TACT_TANK_GATHER and GetV(V_TARGET,id) == MyID then
+					MyEnemy=id; MyState=TANK_ST
+					return OnTANKGATHER_ST()
+				end
+			end
+		end
 		if (aggro==1 and TankMonsterCount < TankMonsterLimit) then
 			object = SelectEnemy(GetEnemyList(MyID,-1))
 			if (object ~= 0) then
 				MyState = TANKCHASE_ST
 				MyEnemy = object
+			ReturnAfterKill = false
 				TraceAI ("IDLE_ST -> TANKCHASE_ST")
 				return
 			end
@@ -1716,6 +1840,18 @@ function	OnIDLE_ST ()
 		distance = GetDistanceAP(MyID,StickyX,StickyY)
 	else
 		distance = GetDistanceFromOwner(MyID)
+	end
+    if ReturnToMoveHold==0 and (ReturnAfterKill or UseIdleWalk==0) and NavigationReturnToOwner(MyID,FollowStayBack) then
+        ReturnAfterKill=false
+        MyState=FOLLOW_ST
+        return
+    end
+	if ReturnAfterKill then
+		ReturnAfterKill = false
+		if distance > DiagonalDist(FollowStayBack+1) or distance == -1 then
+			MyState = FOLLOW_ST
+			return OnFOLLOW_ST()
+		end
 	end
 	if (UseIdleWalk~=0 and HPPercent(MyID) > AggroHP and SPPercent(MyID) > math.max(AggroSP,IdleWalkSP)) then -- CHECK
 		if ( distance > GetMoveBounds() or distance == -1) then		-- MYOWNER_OUTSIGNT_IN
@@ -1755,6 +1891,7 @@ function	OnFOLLOW_ST ()
 	if ReturnToMoveHold ~=0 then
 		dist = GetDistanceAP(MyID,StickyX,StickyY)
 	end
+	if ReturnToMoveHold==0 and NavigationReturnToOwner(MyID,FollowStayBack) then return end
 	if (dist <= DiagonalDist(FollowStayBack+1)) then		--  DESTINATION_ARRIVED_IN 
 		FollowTryCount=0
 		MyState = IDLE_ST
@@ -1847,9 +1984,81 @@ function	OnFOLLOW_ST ()
 end
 
 
+local ChaseDetour = nil
+function TryChaseDetour(start)
+	if NavigationReady() then return NavigationChase(MyID,MyEnemy) end
+	if not MyEnemy or MyEnemy == 0 or IsOutOfSight(MyID,MyEnemy) or IsNotKS(MyID,MyEnemy) == 0
+		or GetTact(TACT_CHASE,MyEnemy) == 1 or GetV(V_MOTION,MyEnemy) == MOTION_DEAD then
+		ChaseDetour = nil
+		return false
+	end
+	local now = GetTick()
+	local x,y = GetV(V_POSITION,MyID)
+	local ex,ey = GetV(V_POSITION,MyEnemy)
+	if ChaseDetour and ChaseDetour.target ~= MyEnemy then ChaseDetour = nil end
+	local d = ChaseDetour
+	if not d then
+		if not start then return false end
+		d = {target=MyEnemy,x=x,y=y,ex=ex,ey=ey,attempt=0,deadline=now+10000}
+		ChaseDetour = d
+	end
+	if now >= d.deadline then d.pending=false; return false end
+	if d.pending then
+		if math.abs(x-d.wx) <= 1 and math.abs(y-d.wy) <= 1 then
+			d.pending=false
+			ChaseGiveUpCount=0
+			MyDestX,MyDestY=0,0
+			TraceAI("[CHASE DETOUR] Waypoint reached; retrying target approach")
+			return false
+		end
+		if now < d.untilTick then return true end
+		d.pending=false
+		start=true
+	end
+	if not start then return false end
+	if GetV(V_MOTION,MyID) == MOTION_CASTING or now < (AutoSkillCastTimeout or 0) then return true end
+	local ox,oy=GetV(V_POSITION,GetV(V_OWNER,MyID))
+	local dx,dy=d.ex-d.x,d.ey-d.y
+	local length=math.max(math.abs(dx),math.abs(dy),1)
+	while d.attempt < 8 do
+		d.attempt=d.attempt+1
+		local side=math.mod(d.attempt,2)==1 and 1 or -1
+		local step=2*math.ceil(d.attempt/2)
+		local wx=math.floor(d.x-side*dy/length*step+0.5)
+		local wy=math.floor(d.y+side*dx/length*step+0.5)
+		if wx >= 0 and wy >= 0 and math.max(math.abs(wx-ox),math.abs(wy-oy)) <= math.min(100,GetMoveBounds())
+			and not (TakenCells and TakenCells[wx.."_"..wy]) and (wx~=x or wy~=y) then
+			d.wx,d.wy,d.untilTick,d.pending=wx,wy,now+1000,true
+			MyDestX,MyDestY=wx,wy
+			Move(MyID,wx,wy)
+			TraceAI("[CHASE DETOUR] Attempt "..d.attempt.." waypoint "..wx..","..wy)
+			return true
+		end
+	end
+	return false
+end
+
 function	OnCHASE_ST ()
 	MyAttackStanceX,MyAttackStanceY = 0,0
 	TraceAI ("OnCHASE_ST")
+	if OpportunisticTargeting ==1 and GetV(V_MOTION,MyID)~=MOTION_CASTING and GetTick()>=(AutoSkillCastTimeout or 0) and SuperPassive~=1 and IsRescueTarget(MyEnemy)==0 then
+		if (HPPercent(MyID) > AggroHP and (SPPercent(MyID) > AggroSP or AggroSP==0) and (ShouldStandby == 0 or StickyStandby ==0)) then
+			aggro=1
+		else
+			aggro=0
+		end
+		object=SelectEnemy(GetEnemyList(MyID,aggro),MyEnemy,OpportunisticTargeting==1)
+		if object ~= 0 and object ~= MyEnemy then
+			TraceAI("Opportunistic target change - dropping target "..MyEnemy.." for target "..object)
+			MyDestX,MyDestY=0,0
+			ChaseGiveUpCount=0
+			MyEnemy=object	
+			EnemyPosX = {0,0,0,0,0,0,0,0,0,0}
+			EnemyPosY = {0,0,0,0,0,0,0,0,0,0}
+		end
+	end
+	if NavigationChase(MyID,MyEnemy) then return end
+	if not NavigationReady() and TryChaseDetour(false) then return end
 	local blueprintActive = RunBlueprintCombos("OnChase", MyID, MyEnemy)
 	-- Initialize combo on entering chase state if configured to run during chase
 	if ComboEnabled == 1 and ComboRunDuringChase == 1 and blueprintActive ~= true then
@@ -1914,6 +2123,7 @@ function	OnCHASE_ST ()
 	end
 	if GetV(V_MOTION,MyID)~=MOTION_MOVE then
 		if ChaseGiveUpCount > ChaseGiveUp then
+			if TryChaseDetour(true) then return end
 			Unreachable[MyEnemy]=1
 			if SelectEnemy(GetEnemyList(MyID,-2)) == MyEnemy then --Oh crap, 
 				TraceAI("CHASE_ST -> FOLLOW_ST : Target "..MyEnemy.." marked unreachable but is also rescue target! Trying follow state in hopes of a clean line of attack from owner")
@@ -1958,20 +2168,6 @@ function	OnCHASE_ST ()
 		TraceAI("CHASE_ST: We're not getting any closer - we were "..GetDistanceAPR(MyEnemy,MyPosX[3],MyPosY[3]).." cells away 2 cycles ago, now "..GetDistanceAR(MyID,MyEnemy).." Increment ChaseGiveUpCount")
 	end
 	OnChaseStart()
-	if OpportunisticTargeting ==1 and MySkill==0 and SuperPassive~=1 and IsRescueTarget(MyEnemy)==0 then
-		if (HPPercent(MyID) > AggroHP and (SPPercent(MyID) > AggroSP or AggroSP==0) and (ShouldStandby == 0 or StickyStandby ==0)) then
-			aggro=1
-		else
-			aggro=0
-		end
-		object=SelectEnemy(GetEnemyList(MyID,aggro),MyEnemy)
-		if object ~= 0 then
-			TraceAI("Opportunistic target change - dropping target "..MyEnemy.." for target "..object)
-			MyEnemy=object	
-			EnemyPosX = {0,0,0,0,0,0,0,0,0,0}
-			EnemyPosY = {0,0,0,0,0,0,0,0,0,0}
-		end
-	end
 	if (true == IsInAttackSight(MyID,MyEnemy,MySkill,MySkillLevel)) then  -- ENEMY_INATTACKSIGHT_IN
 		MyState = ATTACK_ST
 		AttackTimeout=GetTick()+AttackTimeLimit
@@ -2008,7 +2204,7 @@ function	OnCHASE_ST ()
 			skilltype=v[1]
 			if v[2]~=0 then
 				if IsInAttackSight(MyID,MyEnemy,v[2],v[3])==true then
-					if (skilltype == MOB_ATK and UseHomunSSkillChase==1 and AutoMobMode~=0  and (MySkillUsedCount < tact_skill or tact_skill==SKILL_ALWAYS or (BerserkMode==1 and Berserk_SkillAlways==1))) then
+					if (skilltype == MOB_ATK and (UseHomunSSkillChase==1 or (KimiSkillMetadata and KimiSkillMetadata[v[2]])) and AutoMobMode~=0  and (MySkillUsedCount < tact_skill or tact_skill==SKILL_ALWAYS or (BerserkMode==1 and Berserk_SkillAlways==1))) then
 						local mobskill_level=skill_level
 						if AoEFixedLevel == 1 then
 							mobskill_level=v[3]
@@ -2113,7 +2309,7 @@ function	OnCHASE_ST ()
 			end
 		end
 		ox,oy=GetV(V_POSITION,GetV(V_OWNER,MyID))
-		if GetDistanceAPR(GetV(V_OWNER,MyID),x,y) < GetMoveBounds() then
+		if GetDistanceAPR(GetV(V_OWNER,MyID),x,y) <= GetMoveBounds() then
 			-- Movement debug: current distance and intended destination
 			local distNow = GetDistanceA(MyID, MyEnemy)
 			local currentAtkRange = AttackRange(MyID, MySkill, MySkillLevel)
@@ -2151,6 +2347,7 @@ function OnATTACK_ST ()
 	TraceAI ("OnATTACK_ST MyEnemy: "..MyEnemy.." MyPos "..formatpos(GetV(V_POSITION,MyID)).." ("..GetV(V_MOTION,MyID)..") enemypos "..formatpos(GetV(V_POSITION,MyEnemy)).." ("..GetV(V_MOTION,MyEnemy)..") MyTarget: "..GetV(V_TARGET,MyID)..", GetV(V_TARGET: "..GetV(V_HOMUNTYPE, MyEnemy))	
 
 	if (true == IsOutOfSight(MyID,MyEnemy)) then -- first thing's first, if enemy is gone drop it. 
+		ReturnAfterKill = true
 		MyState = IDLE_ST
 		MyEnemy = 0
 		EnemyPosX = {0,0,0,0,0,0,0,0,0,0}
@@ -2160,6 +2357,7 @@ function OnATTACK_ST ()
 		return OnIDLE_ST()
 	end
 	if (MOTION_DEAD == GetV(V_MOTION,MyEnemy)) then   -- Enemy dead? Okay we're done here - drop it. 
+		ReturnAfterKill = true
 		MyState = IDLE_ST
 		MyEnemy = 0
 		EnemyPosX = {0,0,0,0,0,0,0,0,0,0}
@@ -2168,8 +2366,19 @@ function OnATTACK_ST ()
 		TraceAI ("ATTACK_ST -> IDLE_ST  Enemy dead")
 		return OnIDLE_ST()
 	end
+	if OpportunisticTargeting == 1 and SuperPassive ~= 1 and IsRescueTarget(MyEnemy) == 0
+		and GetTick() >= (AutoSkillCastTimeout or 0) and HPPercent(MyID) > AggroHP
+		and (AggroSP == 0 or SPPercent(MyID) > AggroSP) then
+		local nearest = SelectEnemy(GetEnemyList(MyID,1),MyEnemy,true)
+		if nearest ~= 0 and nearest ~= MyEnemy then
+			MyEnemy = nearest
+			MyState = CHASE_ST
+			return OnCHASE_ST()
+		end
+	end
 	local mytarg=GetV(V_TARGET,MyID)
-	if mytarg~=MyEnemy and MyStates[1]==ATTACK_ST then
+	local comboRangeSkill = GetComboRangeSkill(MyID)
+	if mytarg~=MyEnemy and MyStates[1]==ATTACK_ST and not (comboRangeSkill and comboRangeSkill > 0) and UseSkillOnly ~= 1 then
 		AttackGiveUpCount=AttackGiveUpCount+1
 		if AttackGiveUpCount > 4 then --MyEnemies[3]==MyEnemy and MyStates[3]==ATTACK_ST and MyStates[2]==ATTACK_ST then
 			local tx,ty=GetV(V_POSITION,MyEnemy)
@@ -2210,6 +2419,10 @@ function OnATTACK_ST ()
 		end
 	end
 	if (AttackTimeout < GetTick() and AttackTimeLimit > 0) then -- Attack time limit reached.
+		if TryChaseDetour(true) then
+			MyState=CHASE_ST
+			return
+		end
 		MyState = FOLLOW_ST
 		Unreachable[MyEnemy]=1
 		MyEnemy = 0
@@ -2225,8 +2438,10 @@ function OnATTACK_ST ()
 		BerserkMode=1
 	end	
 	DoAutoBuffs(2)
-	local skill,level
-	if UseSkillOnly==1 then
+	local skill,level = GetComboRangeSkill(MyID)
+	if skill ~= nil then
+		-- The current combo action determines range, including its auto-attack steps.
+	elseif UseSkillOnly==1 then
 		skill,level=GetAtkSkill(MyID)
 	elseif MySkill~=0 then
 		skill,level=MySkill,MySkillLevel
@@ -2249,6 +2464,7 @@ function OnATTACK_ST ()
 	end
 	OnAttackStart()
 
+	if NavigationChase(MyID,MyEnemy) then return end
 	-- Blueprint combo system (node-based) takes precedence when enabled
 	local blueprintActiveNow = RunBlueprintCombos("OnAttack", MyID, MyEnemy)
 	if blueprintActiveNow then
@@ -2263,7 +2479,8 @@ function OnATTACK_ST ()
 	if ComboEnabled == 1 and ComboState and ComboState.currentSlot and ComboState.currentSlot > 0 and ComboRunDuringAttack == 1 then
 		comboActive = true
 	end
-	if KiteMonsters == 1 and comboActive ~= true then
+	local autoKiteSkill = GetAtkSkill(MyID)
+	if KiteMonsters == 1 and comboActive ~= true and autoKiteSkill ~= S_ILLUSION_OF_BREATH and autoKiteSkill ~= S_ILLUSION_OF_LIGHT then
 		if DoKiteAdjust(MyID, MyEnemy) then
 			TraceAI("ATTACK_ST: Pre-cast kiting engaged by threshold")
 			-- Skip casting this tick; repositioning will complete first
@@ -2284,41 +2501,13 @@ function OnATTACK_ST ()
 	--else
 	--	mobcount=0
 	--end
-	--Sniping routine (respect UseAttackSkill) — suppressed when combo is active or combo system is enabled
-	local comboActive = (ComboEnabled == 1 and ComboRunDuringAttack == 1 and ComboState and ComboState.currentSlot and ComboState.currentSlot > 0)
-	if ComboEnabled == 1 then
-		TraceAI("[COMBO GATE] Skipping snipe because combo system is enabled")
-	elseif comboActive then
-		TraceAI("[COMBO GATE] Skipping snipe due to active combo")
-	elseif (UseAttackSkill == 1) and (IsHomun(MyID)==1 and SuperPassive~=1 and BerserkMode==0 and (GetTick() >= AutoSkillTimeout) and aggro <= AutoMobCount and GetTact(TACT_SNIPE,MyEnemy)==SNIPE_OK and (ShouldStandby == 0 or StickyStandby ==0)) then
-		target=SelectEnemy(GetEnemyList(MyID,2)) -- This actually checks range - I know it's ugly to do it there, skill range checks need to be done at that point so we can pick a low priority target thats in range, instead of a high priority one out of range. 
-		if target ~=0 then
-			snipeskill=0
-			local snipe_tact_skillclass=GetTact(TACT_SKILLCLASS,target)
-			if snipeskill==0 and (snipe_tact_skillclass == CLASS_S or snipe_tact_skillclass == CLASS_BOTH or snipe_tact_skillclass == CLASS_MIN_S) then
-				snipeskill,snipelevel=GetSAtkSkill(MyID)
-			end
-			if snipeskill==0 and (snipe_tact_skillclass == CLASS_OLD or snipe_tact_skillclass == CLASS_BOTH or snipe_tact_skillclass == CLASS_MIN_OLD) then
-				snipeskill,snipelevel=GetAtkSkill(MyID)
-			end
-			--TraceAI("snipe "..skill.." level"..level)
-			if snipeskill ~=0 then
-				slevel = GetTact(TACT_SKILL,target)
-				if slevel < 0 then
-					slevel=-1*slevel
-					if slevel > snipelevel then
-						slevel = snipelevel
-					end
-					if ((GetV(V_SP,MyID)-ReserveSP >= GetTact(TACT_SP,target)+GetSkillInfo(snipeskill,3,slevel))) then
-						TraceAI("Snipe attack on "..target.." "..snipeskill.." "..slevel)
-						DoSkill(snipeskill,slevel,target)
-					end
-				end
-			end
-		end
+	-- Snipe controls casting distance on the current target. Combo dispatch
+	-- applies the same positioning policy to each ranged skill in its sequence.
+	if ComboEnabled ~= 1 then
+		local rangeSkill,rangeLevel=GetAtkSkill(MyID)
+		if UseAttackSkill == 1 and PositionComboSkill(MyID,MyEnemy,rangeSkill,rangeLevel) then return end
 	end
-	
-	
+
 	-- Begin skill selection routine
 	skilltouse = {-1,0,0}
 	-- First digit (1): -1 = no skill, 0 single target, 1 debuff, 2 mob
@@ -2357,7 +2546,7 @@ function OnATTACK_ST ()
 				TraceAI("skilltype ".. skilltype.." MySkillUsedCount "..MySkillUsedCount.." tact_skill ".. tact_skill.." tact_skillclass"..tact_skillclass.."v"..v[1].." "..v[2].." "..v[3])		
 				if v[2]~=0 then
 					if IsInAttackSight(MyID,MyEnemy,v[2],v[3])==true then
-						if (skilltype == MOB_ATK and UseHomunSSkillAttack==1 and AutoMobMode~=0 and (MySkillUsedCount < tact_skill or tact_skill==SKILL_ALWAYS or (BerserkMode==1 and Berserk_SkillAlways==1))) then
+						if (skilltype == MOB_ATK and (UseHomunSSkillAttack==1 or (KimiSkillMetadata and KimiSkillMetadata[v[2]])) and AutoMobMode~=0 and (MySkillUsedCount < tact_skill or tact_skill==SKILL_ALWAYS or (BerserkMode==1 and Berserk_SkillAlways==1))) then
 							local mobskill_level=skill_level
 							if AoEFixedLevel == 1 then
 								mobskill_level=v[3]
@@ -2440,7 +2629,117 @@ end
 -- TANK ROUTINES --
 -------------------
 
+local GatherFighting = false
+local function GatherMove(target,range)
+	if DoNotChase == 1 or GetTact(TACT_CHASE,target) == 1 then return end
+	local x,y = GetV(V_POSITION,target)
+	if NavigationReady and NavigationReady() then
+		local nx,ny = NavigationWaypoint(MyID,x,y,range)
+		if nx then Move(MyID,nx,ny) end
+	else
+		local nx,ny = GetStandPoint(MyID,target,0,0)
+		if nx and ny and nx >= 0 and ny >= 0 then Move(MyID,nx,ny) end
+	end
+end
+local function GatherSight(target)
+	if not NavigationReady or not NavigationReady() then return true end
+	local x,y=GetV(V_POSITION,MyID)
+	local tx,ty=GetV(V_POSITION,target)
+	return NavigationSight(x,y,tx,ty)
+end
+local function GatherSkillRange(skill,level)
+	local meta = KimiSkillMetadata[skill]
+	local area = SkillAOEInfo[skill]
+	if meta and meta.targetMode == 0 and area then
+		local size = area[1][level] or area[1][1]
+		if area[3] == "radius" then return size end
+		return math.floor(size/2)
+	end
+	return GetSkillInfo(skill,2,level) or 1
+end
+function OnTANKGATHER_ST()
+	local held,pending = {},{}
+	local count = 0
+	local owner = GetV(V_OWNER,MyID)
+	for id,_ in pairs(Targets) do
+		if GetTact(TACT_BASIC,id) == TACT_TANK_GATHER and IsMonster(id) == 1
+			and GetV(V_MOTION,id) ~= MOTION_DEAD and not IsOutOfSight(MyID,id)
+			and GetDistanceRect(owner,id) <= GetMoveBounds() and IsNotKS(MyID,id) == 1 then
+			if GetV(V_TARGET,id) == MyID then held[id]={}; count=count+1
+			elseif GetDistanceA(owner,id) <= GetAggroDist() then pending[id]={} end
+		end
+	end
+	local function nearest(list)
+		local best,dist=0,100000
+		for id,_ in pairs(list) do
+			local d=GetDistanceA(MyID,id)
+			if Unreachable[id] ~= 1 and d<dist then best,dist=id,d end
+		end
+		return best
+	end
+	local nextTarget = nearest(pending)
+	if count == 0 then GatherFighting=false end
+	local goal = math.min(math.max(1,tonumber(AutoMobCount) or 1),math.max(1,tonumber(TankMonsterLimit) or 30))
+	if count >= goal or (count > 0 and nextTarget == 0) then GatherFighting=true end
+	local target = GatherFighting and nearest(held) or nextTarget
+	if target == 0 and count > 0 then target = nearest(held) end
+	if target == 0 then
+		GatherFighting=false
+		MyEnemy=0; MyState=IDLE_ST
+		return
+	end
+	if MyEnemy ~= target then MySkillUsedCount=0 end
+	MyEnemy=target; MyState=TANK_ST; ReturnAfterKill=false
+	if GetTick() < (AutoSkillTimeout or 0) or GetTick() < (AutoSkillCastTimeout or 0) then return end
+	-- Ward approaches the edge of Taunt's actual radius, not melee range.
+	if not GatherFighting then
+		if nextTarget == 0 then return end -- Hold an incomplete group; do not attack it.
+		local ready,level = KimiSkillCanCast(S_TAUNT,nil,MyID)
+		local allowed = ready and ComboTacticLevel(S_TAUNT,level,MyID,target) or 0
+		if allowed and allowed > 0 then
+			local range=GatherSkillRange(S_TAUNT,allowed)
+			if GetDistanceRect(MyID,target)>range or not GatherSight(target) then
+				GatherMove(target,range); return
+			end
+			local nearby=0
+			for id,_ in pairs(held) do
+				if GetDistanceRect(MyID,id)<=range and GatherSight(id) then nearby=nearby+1 end
+			end
+			for id,_ in pairs(pending) do
+				if GetDistanceRect(MyID,id)<=range and GatherSight(id) then nearby=nearby+1 end
+			end
+			if nearby >= goal and DoSkill(S_TAUNT,allowed,MyID) ~= 0 then
+				RecordComboTacticCast(target,S_TAUNT); return
+			end
+		end
+		-- On cooldown (or on another Kimi), collect by approaching and tagging.
+		if not IsInAttackSight(MyID,target) then GatherMove(target,1)
+		elseif UseSkillOnly ~= 1 and GetTick() >= (TankHitTimeout or 0)+2500 then
+			Attack(MyID,target); TankHitTimeout=GetTick()
+		end
+		return
+	end
+	-- Finish the collected group here instead of entering owner-follow movement.
+	if ComboEnabled == 1 and ComboRunDuringAttack == 1 then ExecuteCombo(MyID,target); return end
+	if UseAttackSkill == 1 then
+		local skill,level=GetMobSkill(MyID)
+		if skill == 0 then skill,level=GetAtkSkill(MyID) end
+		if skill ~= 0 then
+			local allowed=ComboTacticLevel(skill,level,MyID,target)
+			if allowed and allowed>0 then
+				local range=GatherSkillRange(skill,allowed)
+				if GetDistanceRect(MyID,target)>range or not GatherSight(target) then GatherMove(target,range); return end
+				if DoSkill(skill,allowed,target) ~= 0 then RecordComboTacticCast(target,skill); return end
+			end
+		end
+	end
+	if UseSkillOnly ~= 1 then
+		if IsInAttackSight(MyID,target) then Attack(MyID,target) else GatherMove(target,1) end
+	end
+end
+
 function	OnTANKCHASE_ST ()
+	if GetTact(TACT_BASIC,MyEnemy) == TACT_TANK_GATHER then return OnTANKGATHER_ST() end
 	if (UseSkillOnly==1) then
 		skill,level=GetAtkSkill(MyID)
 	elseif (UseSkillOnly==-1) then
@@ -2558,6 +2857,7 @@ function	OnTANKCHASE_ST ()
 end 
 
 function OnTANK_ST()
+	if GetTact(TACT_BASIC,MyEnemy) == TACT_TANK_GATHER then return OnTANKGATHER_ST() end
 	if (GetV(V_MOTION,MyEnemy)==MOTION_DEAD or IsOutOfSight(MyID,MyEnemy)) then
 		MyState=IDLE_ST
 		TraceAI("TANK_ST->IDLE_ST - Target dead or out of sight")
@@ -2830,7 +3130,7 @@ end
 function	OnMOVE_CMD_ST ()
 
 	TraceAI ("OnMOVE_CMD_ST")
-	if GetDistanceAPR(GetV(V_OWNER,MyID),MyMoveX,MyMoveY) > 15 then
+	if GetDistanceAPR(GetV(V_OWNER,MyID),MyMoveX,MyMoveY) > GetMoveBounds() then
 		TraceAI("OnMOVE_CMD_ST -> IDLE_ST: Attempt to move to location off screen")
 		logappend("AAI_ERROR","We were in MOVE_CMD_ST trying to move to "..formatpos(MyMoveX,MyMoveY).." while owner standing at "..formatpos(GetV(V_POSITION,GetV(V_OWNER,MyID))))
 		MyState=IDLE_ST
@@ -3007,12 +3307,18 @@ end
 
 
 function OnSKILL_OBJECT_CMD_ST ()
-	if IsInAttackSight(MyID,MyEnemy,MySkill,MySkillLevel) then
-		DoSkill(MySkill,MySkillLevel,MyEnemy)
-		TraceAI("SKILL_OBJECT_CMD_ST --> IDLE_ST - skill used")
-		MyState=IDLE_ST
-		MyDestX,MyDestY,MyEnemy,MySkill,MySkillLevel=0,0,0,0,0
-		return
+    if GetV(V_MOTION,MyID)==MOTION_CASTING or GetTick()<(AutoSkillCastTimeout or 0) then return end
+    local hx,hy=GetV(V_POSITION,MyID)
+    local tx,ty=GetV(V_POSITION,MyEnemy)
+    if IsInAttackSight(MyID,MyEnemy,MySkill,MySkillLevel) and NavigationSight(hx,hy,tx,ty) then
+        local issued=DoSkill(MySkill,MySkillLevel,MyEnemy)
+        if issued==0 and SkillObjectCMDTimeout<=SkillObjectCMDLimit then
+            SkillObjectCMDTimeout=SkillObjectCMDTimeout+1
+            return
+        end
+        MyState=IDLE_ST
+        MyDestX,MyDestY,MyEnemy,MySkill,MySkillLevel=0,0,0,0,0
+        return
 	elseif IsOutOfSight(MyID,MyEnemy) then
 		TraceAI("SKILL_OBJECT_CMD_ST --> IDLE_ST - target off screen")
 		MyState=IDLE_ST
@@ -3023,6 +3329,12 @@ function OnSKILL_OBJECT_CMD_ST ()
 		MyDestX,MyDestY,MyEnemy,MySkill,MySkillLevel=0,0,0,0,0
 		return OnIDLE_ST()
 	else
+        if NavigationReady() then
+            local nx,ny=NavigationWaypoint(MyID,tx,ty,math.max(1,AttackRange(MyID,MySkill,MySkillLevel)-1))
+            if nx then NavigationMove(MyID,nx,ny) end
+            if ny~=true then SkillObjectCMDTimeout=SkillObjectCMDTimeout+1 end
+            return
+        end
 		x,y= GetStandPoint(MyID,MyEnemy,MySkill,MySkillLevel,alt)
 		if x < 10 and y < 10 then
 			local ex,ey=GetV(V_POSITION,MyEnemy)
@@ -3042,12 +3354,17 @@ end
 
 
 function OnSKILL_AREA_CMD_ST ()
+	if GetV(V_MOTION,MyID)==MOTION_CASTING or GetTick()<(AutoSkillCastTimeout or 0) then return end
 
 	TraceAI ("OnSKILL_AREA_CMD_ST")
 
 	local x , y = GetV (V_POSITION,MyID)
 	if (GetDistance(x,y,MyDestX,MyDestY) <= AttackRange(MyID,MySkill,MySkillLevel)) then	-- DESTARRIVED_IN
-		DoSkill(MySkill,MySkillLevel,0,nil,MyDestX,MyDestY)
+        local issued=DoSkill(MySkill,MySkillLevel,0,nil,MyDestX,MyDestY)
+        if issued==0 and SkillObjectCMDTimeout<=SkillObjectCMDLimit then
+            SkillObjectCMDTimeout=SkillObjectCMDTimeout+1
+            return
+        end
 		MyState = IDLE_ST
 		MySkill = 0
 	else
@@ -3190,6 +3507,7 @@ function	GetEnemyList (myid,aggro)
 	for k,v in pairs(Targets) do
 		tact = GetTact(TACT_BASIC,k)
 		casttact=GetTact(TACT_CAST,k)
+		if tact == TACT_TANK_GATHER then tact = TACT_TANK end
 		if tact==TACT_TANKMOB then
 			if GetAggroCount() > AutoMobCount then
 				tact = TACT_ATTACK_M
@@ -3198,7 +3516,8 @@ function	GetEnemyList (myid,aggro)
 			end
 		end
 		--TraceAI("Target"..k.." tact:"..tact.." Motion"..v[1].." TClass"..v[2])
-		if (0 < tact and (tact < 5 or tact >9) and aggro==1 and (DoNotAttackMoving ~=1 or v[1]~=1) and (tact ~= 14 or AttackLastFullSP==0 or SPPercent(MyID)==100)) or  (tact > 9 and tact < 13 and aggro == 2 and k~=MyEnemy) or  (v[2]>0 and tact>0 and (tact~=9 or v[2]==1) and (v[1]==3 or casttact >= CAST_REACT) and aggro~=2 and (aggro > -1 or (aggro==-2 and IsRescueTarget(k)==1))) or (tact == -1 and aggro==-1 and v[2]~=1) then
+		local ownerRescue = aggro == -2 and tact > 0 and GetV(V_TARGET,k) == owner and IsRescueTarget(k) == 1
+		if (0 < tact and (tact < 5 or tact >9) and aggro==1 and (DoNotAttackMoving ~=1 or v[1]~=1) and (tact ~= 14 or AttackLastFullSP==0 or SPPercent(MyID)==100)) or  (tact > 9 and tact < 13 and aggro == 2 and k~=MyEnemy) or ownerRescue or (v[2]>0 and tact>0 and (tact~=9 or v[2]==1) and (v[1]==3 or (v[1]==5 and casttact >= CAST_REACT)) and aggro~=2 and (aggro > -1 or (aggro==-2 and IsRescueTarget(k)==1))) or (tact == -1 and aggro==-1 and v[2]~=1) then
 			--TraceAI("Tactics say to attack:"..k)
 			if (IsNotKS(myid,k)==1 and v[1] > -1) then
 				--TraceAI("Is alive and not a KS")
@@ -3241,6 +3560,21 @@ function	GetEnemyList (myid,aggro)
 			end
 		end
 	end
+	-- Throttled rescue diagnostics: expose server target IDs and eligibility.
+	if aggro == -2 and GetTick() >= (RescueTraceNextTick or 0) then
+		RescueTraceNextTick = GetTick() + 2000
+		local details = "[RESCUE CHECK] owner="..tostring(owner).." hp="..tostring(HPPercent(owner))
+			.." state="..tostring(MyState).." current="..tostring(MyEnemy)
+			.." ownerDistance="..tostring(GetDistanceRect(myid, owner)).." bounds="..tostring(GetMoveBounds())
+		for id, info in pairs(Targets) do
+			details = details.." | mob="..tostring(id).." type="..tostring(GetV(V_HOMUNTYPE,id))
+				.." target="..tostring(GetV(V_TARGET,id)).." motion="..tostring(info[1]).." targetClass="..tostring(info[2])
+				.." basic="..tostring(GetTact(TACT_BASIC,id)).." rescue="..tostring(GetTact(TACT_RESCUE,id))
+				.." ownerDistance="..tostring(GetDistanceRect(owner,id)).." eligible="..tostring(enemys[id] ~= nil)
+		end
+		TraceAI(details)
+	end
+
 	return enemys
 end
 
@@ -3250,7 +3584,7 @@ end
 -- enemys[n][3] = tact
 -- enemys[n][4] = casttact
 
-function SelectEnemy(enemys,curenemy)
+function SelectEnemy(enemys,curenemy,nearest)
 	local min_priority=-1
 	local priority
 	local min_dis = 100
@@ -3261,7 +3595,7 @@ function SelectEnemy(enemys,curenemy)
 	local max_reachable=1
 	--local min_mobcount=1
 	--local mobcount=0
-	if curenemy~=nil then -- it's an opportunistic attack
+	if curenemy~=nil and not nearest then -- preserve priority/hysteresis outside nearest mode
 		local dist = GetDistanceA(MyID,curenemy)
 		local aggrotemp=0
 		if IsFriendOrSelf(GetV(V_TARGET,curenemy)) ==1 then
@@ -3276,7 +3610,7 @@ function SelectEnemy(enemys,curenemy)
 	end
 	for k,v in pairs(enemys) do
 		local basepriority = v[3] -- basic tact
-		if v[2]>0 and (v[1]==3 or v[4]>=CAST_REACT) then
+		if v[2]>0 and (v[1]==3 or (v[1]==5 and v[4]>=CAST_REACT)) then
 			aggro=1
 		else
 			aggro=0
@@ -3299,7 +3633,7 @@ function SelectEnemy(enemys,curenemy)
 		--TraceAI(priority.."/"..min_priority.." "..dis.."/"..min_dis.." "..unreachable.."/"..max_reachable)
 		if (unreachable <= max_reachable) then
 			--if (aggro >= min_aggro) then
-				if (priority > min_priority or (priority==min_priority and dis < min_dis)) then
+				if (nearest and (unreachable < max_reachable or dis < min_dis or (dis == min_dis and k == curenemy))) or (not nearest and (priority > min_priority or (priority==min_priority and dis < min_dis))) then
 					--if (dis < min_dis) then
 						result = k
 						min_dis = dis
@@ -3400,18 +3734,10 @@ function DoAutoBuffs(buffmode)
 				QuickenTimeout = -1
 			elseif (level == 0) then
 				-- skill in cooldown
-			elseif (GetSkillInfo(skill, 3, level) <= GetV(V_SP, MyID)) then
-				-- Body Double should respect owner HP threshold before casting
-				if skill == S_BODY_DOUBLE then
-					local owner = GetV(V_OWNER, MyID)
-					local ohp = HPPercent(owner)
-					if BodyDoubleOwnerHP and ohp > BodyDoubleOwnerHP then
-						-- Owner HP above threshold; skip casting Body Double
-						return
-					end
-				end
+			elseif (KimiSkillMetadata and KimiSkillMetadata[skill] and KimiSkillCanCast(skill, level, MyID)) or
+				(not (KimiSkillMetadata and KimiSkillMetadata[skill]) and GetSkillInfo(skill, 3, level) <= GetV(V_SP, MyID)) then
 				DoSkill(skill, level, MyID, 2)
-				QuickenTimeout = AutoSkillCastTimeout + GetSkillInfo(skill, 9, level)
+				QuickenTimeout = AutoSkillCastTimeout + (KimiSkillMetadata and KimiSkillMetadata[skill] and GetKimiSkillReuseDelay(skill, level) or GetSkillInfo(skill, 9, level))
 				UpdateTimeoutFile()
 
 				return
@@ -3427,9 +3753,10 @@ function DoAutoBuffs(buffmode)
 				GuardTimeout = -1
 			elseif (level == 0) then
 				-- skill in cooldown
-			elseif (GetSkillInfo(skill, 3, level) <= GetV(V_SP, MyID)) then
+			elseif (KimiSkillMetadata and KimiSkillMetadata[skill] and KimiSkillCanCast(skill, level, MyID)) or
+				(not (KimiSkillMetadata and KimiSkillMetadata[skill]) and GetSkillInfo(skill, 3, level) <= GetV(V_SP, MyID)) then
 				DoSkill(skill, level, MyID, 1)
-				GuardTimeout = AutoSkillCastTimeout + GetSkillInfo(skill, 9, level)
+				GuardTimeout = AutoSkillCastTimeout + (KimiSkillMetadata and KimiSkillMetadata[skill] and GetKimiSkillReuseDelay(skill, level) or GetSkillInfo(skill, 9, level))
 				UpdateTimeoutFile()
 
 				return
@@ -3440,7 +3767,67 @@ function DoAutoBuffs(buffmode)
 	return OnAutoBuffs(buffmode)
 end
 
+-- Master Swap availability comes from its skill Enabled setting.
+function DoAutoMasterSwap(myid)
+	local threshold = tonumber(MasterSwapOwnerHP) or 0
+	if threshold <= 0 then return end
+	if GetTick() < (AutoSkillTimeout or 0) or GetTick() < (AutoSkillCastTimeout or 0) then return end
+	local owner = GetV(V_OWNER,myid)
+	if not owner or owner <= 0 then return end
+	local hp = HPPercent(owner)
+	if hp <= 0 or hp > threshold then return end
+	local canCast,level = KimiSkillCanCast(S_MASTER_SWAP,nil,myid)
+	if not canCast then return end
+	if DoSkill(S_MASTER_SWAP,level,owner) == 0 then return end
+	return 1
+end
+
+-- Body Double is an emergency automatic skill, independent of attack buffs.
+function DoAutoBodyDouble(myid)
+	local enabled = UseAutoBD
+	if enabled == nil then enabled = UseBodyDouble end -- Existing configurations.
+	if enabled ~= 1 and enabled ~= true then return end
+	if GetTick() < (AutoSkillTimeout or 0) or GetTick() < (AutoSkillCastTimeout or 0) then return end
+	local owner = GetV(V_OWNER,myid)
+	if not owner or owner <= 0 then return end
+	local threshold = tonumber(BodyDoubleOwnerHP) or 20
+	if threshold <= 0 then
+		-- A positive interval enables timed casting without an HP condition.
+		if (tonumber(BodyDoubleCooldown) or 0) <= 0 then return end
+	else
+		local hp = HPPercent(owner)
+		if hp <= 0 or hp > threshold then return end
+	end
+	local canCast,level = KimiSkillCanCast(S_BODY_DOUBLE,nil,myid)
+	if not canCast then return end
+	if DoSkill(S_BODY_DOUBLE,level,myid) == 0 then return end
+	return 1
+end
+
+local BastionAutoNextTick = 0
+local BastionDebugNextTick = 0
+local function BastionDebug(myid,reason)
+	if EnableDebugLogging ~= 1 and EnableDebugLogging ~= true then return end
+	if GetTick() < BastionDebugNextTick then return end
+	BastionDebugNextTick = GetTick() + 5000
+	TraceAI("Bastion auto-heal: "..reason.." HP="..tostring(HPPercent(myid))
+		.." threshold="..tostring(WarmDefHP).." SP="..tostring(GetV(V_SP,myid)))
+end
 function DoHealingTasks (myid)
+	if GetKimiType(myid) == WARD then
+		if HPPercent(myid) >= (WarmDefHP or 100) then return end
+		if GetTick() < BastionAutoNextTick then BastionDebug(myid,"reuse wait"); return end
+		if GetTick() < AutoSkillTimeout then BastionDebug(myid,"global skill delay"); return end
+		local skill = S_WARM_DEF
+		local canCast,resolvedLevel,reason = KimiSkillCanCast(skill,nil,myid)
+		if not canCast then BastionDebug(myid,reason or "not ready"); return end
+		local result = DoSkill(skill,resolvedLevel,myid)
+		if result == 0 then BastionDebug(myid,"cast dispatch rejected"); return end
+		BastionAutoNextTick = math.max(AutoSkillCastTimeout or GetTick(),GetTick())
+			+ GetKimiSkillReuseDelay(skill,resolvedLevel)
+		BastionDebug(myid,"cast requested")
+		return 1
+	end
 	-- Unified auto-heal logic: respect UseChaoticHeal + HealSelfHP/HealOwnerHP thresholds only
 	-- Ignore secondary healConditions table to prevent duplicate/conflicting gates
 	local rhp = HPPercent(myid)
@@ -3449,7 +3836,7 @@ function DoHealingTasks (myid)
 	local skill, level = GetHealingSkill(myid)
 
 	-- Require auto-heal enabled and valid skill
-	if UseChaoticHeal ~= 1 or skill <= 0 then
+	if skill <= 0 then
 		return
 	end
 	-- Respect global autoskill timeout to avoid spamming
@@ -3457,16 +3844,19 @@ function DoHealingTasks (myid)
 		return
 	end
 
-	local homSp = GetV(V_SP, myid)
-	local homMaxSp = GetV(V_MAXSP, myid)
-	local spCost = math.floor(homMaxSp * 0.15 + GetSkillInfo(skill, 3, level))
+	local canCast, resolvedLevel, reason = KimiSkillCanCast(skill, level, myid)
+	if not canCast then
+		TraceAI("[AUTO HEAL] Chaotic Heal rejected: "..tostring(reason))
+		return
+	end
+	level = resolvedLevel
 
 	-- Prioritize self heal if below threshold; else heal owner if below threshold
 	if rhp < (ChaoticHealKimiHP or HealSelfHP or 60) then
-		if homSp > spCost then
+		if canCast then
 			TraceAI("[AUTO HEAL] Self HP="..rhp.."% casting Chaotic Heal")
 			DoSkill(skill, level, myid)
-			AutoSkillTimeout = GetTick() + (GetSkillInfo(skill, 9, level) or 500) + AutoSkillCastTimeout
+			AutoSkillTimeout = AutoSkillCastTimeout + GetKimiSkillReuseDelay(skill, level)
 			return 1
 		else
 			TraceAI("[AUTO HEAL] Insufficient SP for self heal")
@@ -3475,10 +3865,10 @@ function DoHealingTasks (myid)
 	end
 
 	if owner ~= nil and owner > 0 and ohp < (ChaoticHealOwnerHP or HealOwnerHP or 60) then
-		if homSp > spCost then
+		if canCast then
 			TraceAI("[AUTO HEAL] Owner HP="..ohp.."% casting Chaotic Heal on owner")
 			DoSkill(skill, level, owner)
-			AutoSkillTimeout = GetTick() + (GetSkillInfo(skill, 9, level) or 500) + AutoSkillCastTimeout
+			AutoSkillTimeout = AutoSkillCastTimeout + GetKimiSkillReuseDelay(skill, level)
 			return 1
 		else
 			TraceAI("[AUTO HEAL] Insufficient SP for owner heal")
@@ -3554,6 +3944,15 @@ function	OnIDLEWALK_ST ()
 				return OnCHASE_ST()
 			end
 			return	
+		end
+		-- Resume an already collected group without requiring another untagged mob.
+		if aggro == 1 then
+			for id,_ in pairs(Targets) do
+				if GetTact(TACT_BASIC,id) == TACT_TANK_GATHER and GetV(V_TARGET,id) == MyID then
+					MyEnemy=id; MyState=TANK_ST
+					return OnTANKGATHER_ST()
+				end
+			end
 		end
 		if (aggro==1 and TankMonsterCount < TankMonsterLimit) then
 			object = SelectEnemy(GetEnemyList(MyID,-1))
@@ -3782,6 +4181,18 @@ function DoKiteAdjust(myid,enemy)
 	local x,y=GetV(V_POSITION,myid)
 	local ox,oy=GetV(V_POSITION,GetV(V_OWNER,myid))
 	local ex,ey=GetV(V_POSITION,enemy)
+    if NavigationReady() then
+        local best,bx,by=distance,nil,nil
+        local bounds=math.min(GetMoveBounds(),KiteBounds or GetMoveBounds())
+        for dx=-1,1 do for dy=-1,1 do
+            local nx,ny=x+dx,y+dy
+            local d=GetDistanceAP(enemy,nx,ny)
+            if d>best and math.max(math.abs(nx-ox),math.abs(ny-oy))<=bounds
+                and NavigationStep(x,y,nx,ny) and NavigationSight(nx,ny,ex,ey) then best,bx,by=d,nx,ny end
+        end end
+        if bx then Move(myid,bx,by);return true end
+        return false
+    end
 	local xoptions ={[2]=1,[0]=1,[1]=1}
 	local yoptions ={[2]=1,[0]=1,[1]=1}
 	local xdirection,ydirection=0,0
@@ -4105,7 +4516,7 @@ function AI(myid)
 							IsActive[v]=1
 						end
 					end
-					if (GetTact(TACT_BASIC,v)==TACT_TANK and GetV(V_TARGET,v)==MyID) then
+					if ((GetTact(TACT_BASIC,v)==TACT_TANK or GetTact(TACT_BASIC,v)==TACT_TANK_GATHER) and GetV(V_TARGET,v)==MyID) then
 						TankMonsterCount=TankMonsterCount+1
 					end
 					motionclass=MotionClassLU[GetV(V_MOTION,v)]
@@ -4357,8 +4768,28 @@ function AI(myid)
 		end
 	end
 
+    -- Respect the leash/spawn gates, then service explicit casts before automation.
+    if (MyState==SKILL_OBJECT_CMD_ST or MyState==SKILL_AREA_CMD_ST)
+        and GetDistanceRect(MyID,GetV(V_OWNER,MyID))<=GetMoveBounds() then
+        if GetTick()<(MyStart+SpawnDelay) then return end
+        if MyState==SKILL_OBJECT_CMD_ST then OnSKILL_OBJECT_CMD_ST() else OnSKILL_AREA_CMD_ST() end
+        return
+    end
+
+	if DoAutoBodyDouble(MyID) == 1 then
+		if LagReduction and LagReduction ~= 0 then modtwroSend() end
+		return
+	end
+
+	if DoAutoMasterSwap(MyID) == 1 then
+		if LagReduction and LagReduction ~= 0 then modtwroSend() end
+		return
+	end
+
 	if (UseAutoHeal == 1) then
 		if DoHealingTasks(MyID) == 1 then
+			-- This early return skips the normal end-of-tick dispatch.
+			if LagReduction and LagReduction ~= 0 then modtwroSend() end
 			return
 		end
 	end
@@ -4384,12 +4815,12 @@ function AI(myid)
 	end
 	-- New in 1.51 - specialized cast react tactics. 
 	for k,v in pairs(Targets) do
-		if v[2]==1 or v[2] == 2 then
+		if (v[2]==1 or v[2] == 2) and v[1] == 5 and MyState ~= FOLLOW_ST then
 			tactcast= GetTact(TACT_CAST,k)
 			if tactcast > CAST_REACT then
 				local skill,level=0,0
 				if tactcast > 1000 then
-					for ii,vv in ipairs(GetTargetedSkills()) do
+					for ii,vv in ipairs(GetTargetedSkills(MyID)) do
 						if vv[2]==tactcast and vv[3]~=0 and vv[3]~=nil then
 							skill=vv[2]
 							level=vv[3]
@@ -4397,7 +4828,7 @@ function AI(myid)
 						end
 					end
 				else -- generic skill response. 
-					for ii,vv in ipairs(GetTargetedSkills()) do
+					for ii,vv in ipairs(GetTargetedSkills(MyID)) do
 						if tactcast==9 and vv[2]~=0 and vv[3]~=0 and vv[3] ~=nil then
 							skill=vv[2]
 							level=vv[3]
@@ -4414,7 +4845,8 @@ function AI(myid)
 					MySkill=skill
 					MySkillLevel=level
 					MyEnemy=k
-					MyState=OnSKILL_OBJECT_CMD_ST
+					MyState=SKILL_OBJECT_CMD_ST
+					SkillObjectCMDTimeout=0
 					TraceAI("CAST_REACT_(skill) being enabled against target"..k.." with tactic "..tactcast.." with "..FormatSkill(skill,level))
 					break
 				end

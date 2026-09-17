@@ -1,10 +1,12 @@
-﻿// H_Config.cs
+// H_Config.cs
 //
 // Programmed by Machiavellian of iRO Chaos
 //
 // Description:
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace AzzyAIConfig
@@ -14,10 +16,19 @@ namespace AzzyAIConfig
         #region Save
         public static void Save(string fileName)
         {
-            string file = File.ReadAllText(fileName);
+            Save(fileName, null);
+        }
+
+        // Render the current settings into the supplied Lua text. Keeping the
+        // source text separate from the destination lets named exports and an
+        // imported settings file retain globals this editor does not expose.
+        public static void Save(string fileName, string source)
+        {
+            string file = source ?? (File.Exists(fileName) ? File.ReadAllText(fileName) : string.Empty);
             
             file = SaveBasicOptions(file);
             file = SaveAutoSkillOptions(file);
+            file = SaveKimiSkillOptions(file);
             file = SaveWalkFollowOptions(file);
             file = SaveAutobuffOptions(file);
             file = SaveSkillComboOptions(file);
@@ -26,6 +37,7 @@ namespace AzzyAIConfig
             file = SaveStandbyOptions(file);
             file = SaveBerserkOptions(file);
             file = SavePVPOptions(file);
+            file = SaveNavigationOptions(file);
 
             Program.WriteLine("Saving to file: {0}", fileName);
             File.WriteAllText(fileName, file);
@@ -38,6 +50,7 @@ namespace AzzyAIConfig
             
             LoadBasicOptions(file);
             LoadAutoSkillOptions(file);
+            LoadKimiSkillOptions(file);
             LoadWalkFollowOptions(file);
             LoadAutobuffOptions(file);
             LoadSkillComboOptions(file);
@@ -46,6 +59,7 @@ namespace AzzyAIConfig
             LoadStandbyOptions(file);
             LoadBerserkOptions(file);
             LoadPVPOptions(file);
+            LoadNavigationOptions(file);
             
             Program.WriteLine("Loading from file: {0}", fileName);
             Program.WriteLine("Loading complete.");
@@ -53,7 +67,7 @@ namespace AzzyAIConfig
 
         static string WriteConfigValue(string file, string key, int value)
         {
-            string pattern = key + "\\s*=\\s*-?\\d+";
+            string pattern = "^[ \\t]*" + Regex.Escape(key) + "\\s*=\\s*-?\\d+";
             if (Regex.IsMatch(file, pattern, RegexOptions.Multiline))
             {
                 file = Regex.Replace(file, pattern, string.Format("{0,-25}= {1}", key, value), RegexOptions.Multiline);
@@ -63,6 +77,19 @@ namespace AzzyAIConfig
                 file = string.Format("{1}{0}{2,-25}= {3}", Environment.NewLine, file, key, value);
             }
             return file;
+        }
+
+        static string WriteConfigString(string file, string key, string value)
+        {
+            string safeValue = NavigationMapNames.Normalize(value);
+            string escapedValue = safeValue.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            string pattern = "^[ \\t]*" + Regex.Escape(key) +
+                             "[ \\t]*=[ \\t]*\"(?:[^\"\\\\]|\\\\.)*\"";
+            string replacement = string.Format("{0,-25}= \"{1}\"", key, escapedValue);
+            if (Regex.IsMatch(file, pattern, RegexOptions.Multiline))
+                return Regex.Replace(file, pattern, replacement, RegexOptions.Multiline);
+
+            return string.Format("{1}{0}{2}", Environment.NewLine, file, replacement);
         }
 
         static string SaveBasicOptions(string file)
@@ -99,6 +126,13 @@ namespace AzzyAIConfig
             return string.Copy(file);
         }
 
+        static string SaveNavigationOptions(string file)
+        {
+            Program.WriteLine("Writing Navigation Options");
+            file = WriteConfigValue(file, "EnableDebugLogging", EnableDebugLogging);
+            return WriteConfigString(file, "NavigationMap", NavigationMap);
+        }
+
         static string SaveAutoSkillOptions(string file)
         {
             Program.WriteLine("Writing AutoSkill Options");
@@ -127,6 +161,125 @@ namespace AzzyAIConfig
             file = WriteConfigValue(file, "onlyAOE", onlyAOE);
 
             return string.Copy(file);
+        }
+
+        // The Kimi skill table is the forward-compatible settings surface. Legacy
+        // scalar skill globals are still written by SaveAutoSkillOptions so older
+        // runtime files continue to work.
+        static string SaveKimiSkillOptions(string file)
+        {
+            Program.WriteLine("Writing Kimi Skill Options");
+
+            var levels = new StringBuilder("{");
+            var enabled = new StringBuilder("{");
+            bool first = true;
+            foreach (var skill in KimiSkills.GetActiveDefinitions())
+            {
+                int level = KimiSkills.ClampLevel(skill.Id, GetKimiSkillLevel(skill.Id));
+                int isEnabled = GetKimiSkillEnabled(skill.Id) ? 1 : 0;
+                if (!first)
+                {
+                    levels.Append(", ");
+                    enabled.Append(", ");
+                }
+                levels.AppendFormat("[{0}] = {1}", skill.Id, level);
+                enabled.AppendFormat("[{0}] = {1}", skill.Id, isEnabled);
+                first = false;
+            }
+            levels.Append("}");
+            enabled.Append("}");
+
+            file = WriteConfigTable(file, "KimiSkillLevels", levels.ToString());
+            file = WriteConfigTable(file, "KimiSkillEnabled", enabled.ToString());
+            return string.Copy(file);
+        }
+
+        static string WriteConfigTable(string file, string key, string value)
+        {
+            // Tables written by this class are flat. The multiline form also
+            // replaces an older hand-edited table without touching neighboring
+            // Lua globals.
+            string pattern = "(?ms)^[ \\t]*" + Regex.Escape(key) +
+                             "[ \\t]*=[ \\t]*\\{.*?\\}[ \\t]*(?:\\r?\\n|$)";
+            string replacement = string.Format("{0,-25}= {1}{2}", key, value, Environment.NewLine);
+            if (Regex.IsMatch(file, pattern, RegexOptions.Multiline | RegexOptions.Singleline))
+                return Regex.Replace(file, pattern, replacement, RegexOptions.Multiline | RegexOptions.Singleline);
+
+            return string.Format("{1}{0}{2}", Environment.NewLine, file, replacement);
+        }
+
+        static void LoadKimiSkillOptions(string file)
+        {
+            Program.WriteLine("Loading Kimi Skill Options");
+            ResetKimiSkillSettings();
+
+            var levelEntries = ParseKimiSkillTable(file, "KimiSkillLevels");
+            var enabledEntries = ParseKimiSkillTable(file, "KimiSkillEnabled");
+
+            foreach (var skill in KimiSkills.GetActiveDefinitions())
+            {
+                int level;
+                if (levelEntries.TryGetValue(skill.Id, out level))
+                    KimiSkillLevels[skill.Id] = KimiSkills.ClampLevel(skill.Id, level);
+
+                int enabled;
+                if (enabledEntries.TryGetValue(skill.Id, out enabled))
+                    KimiSkillEnabled[skill.Id] = enabled != 0 ? 1 : 0;
+            }
+
+            // Files predating KimiSkillLevels are migrated from the legacy
+            // scalar globals. A legacy zero remains disabled, while the GUI
+            // presents its editable level as 1.
+            foreach (var legacy in GetLegacyKimiSkillLevels())
+            {
+                if (!levelEntries.ContainsKey(legacy.Key))
+                {
+                    int level = legacy.Value;
+                    KimiSkillLevels[legacy.Key] = level > 0 ?
+                        KimiSkills.ClampLevel(legacy.Key, level) : 1;
+                    if (!enabledEntries.ContainsKey(legacy.Key))
+                        KimiSkillEnabled[legacy.Key] = level > 0 ? 1 : 0;
+                }
+                else if (!enabledEntries.ContainsKey(legacy.Key))
+                {
+                    KimiSkillEnabled[legacy.Key] = legacy.Value > 0 ? 1 : 0;
+                }
+            }
+        }
+
+        static Dictionary<int, int> ParseKimiSkillTable(string file, string key)
+        {
+            var values = new Dictionary<int, int>();
+            string assignment = Regex.Escape(key) + "\\s*=\\s*\\{(?<body>.*?)\\}";
+            Match table = Regex.Match(file, assignment, RegexOptions.Singleline);
+            if (!table.Success)
+                return values;
+
+            MatchCollection entries = Regex.Matches(table.Groups["body"].Value,
+                "\\[\\s*(?<id>\\d+)\\s*\\]\\s*=\\s*(?<value>-?\\d+)");
+            foreach (Match entry in entries)
+            {
+                int id;
+                int value;
+                if (int.TryParse(entry.Groups["id"].Value, out id) &&
+                    int.TryParse(entry.Groups["value"].Value, out value))
+                    values[id] = value;
+            }
+            return values;
+        }
+
+        static Dictionary<int, int> GetLegacyKimiSkillLevels()
+        {
+            return new Dictionary<int, int>
+            {
+                { 8006, warmDefLevel },
+                { 8009, illusionOfClawsLevel },
+                { 8014, chaoticHealLevel },
+                { 8022, bodyDoubleLevel },
+                { 8024, illusionOfBreathLevel },
+                { 8031, illusionOfCrusherLevel },
+                { 8034, illusionOfLightLevel }
+            };
         }
 
         static void LoadBasicOptions(string file)
@@ -176,6 +329,17 @@ namespace AzzyAIConfig
                 DoNotAttackMoving = Convert.ToInt32(Regex.Match(file, "DoNotAttackMoving\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             if (Regex.IsMatch(file, "LiveMobID\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 LiveMobID = Convert.ToInt32(Regex.Match(file, "LiveMobID\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
+        }
+
+        static void LoadNavigationOptions(string file)
+        {
+            EnableDebugLogging = Regex.IsMatch(file, @"(?m)^[ \t]*EnableDebugLogging\s*=\s*1\b") ? 1 : 0;
+            NavigationMap = string.Empty;
+            Match match = Regex.Match(file,
+                "^[ \\t]*NavigationMap[ \\t]*=[ \\t]*\"(?<value>[a-zA-Z0-9_@-]*)\"",
+                RegexOptions.Multiline);
+            if (match.Success)
+                NavigationMap = match.Groups["value"].Value;
         }
 
         static void LoadAutoSkillOptions(string file)
@@ -284,9 +448,20 @@ namespace AzzyAIConfig
             // Body Double options
             if (Regex.IsMatch(file, "UseBodyDouble\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 UseBodyDouble = Convert.ToInt32(Regex.Match(file, "UseBodyDouble\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
+            var autoBD = Regex.Match(file, @"UseAutoBD\s*=\s*(-?\d+)");
+            if (autoBD.Success) UseBodyDouble = Convert.ToInt32(autoBD.Groups[1].Value);
+            BodyDoubleCooldown = 0;
+            var BodyDoubleCooldownMatch = Regex.Match(file, @"BodyDoubleCooldown\s*=\s*(-?\d+)");
+            if (BodyDoubleCooldownMatch.Success) BodyDoubleCooldown = Convert.ToInt32(BodyDoubleCooldownMatch.Groups[1].Value);
+            BastionRenewalCooldown = 0;
+            var BastionRenewalCooldownMatch = Regex.Match(file, @"BastionRenewalCooldown\s*=\s*(-?\d+)");
+            if (BastionRenewalCooldownMatch.Success) BastionRenewalCooldown = Convert.ToInt32(BastionRenewalCooldownMatch.Groups[1].Value);
             if (Regex.IsMatch(file, "BodyDoubleOwnerHP\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 BodyDoubleOwnerHP = Convert.ToInt32(Regex.Match(file, "BodyDoubleOwnerHP\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             
+            WarmDefHP = 100;
+            if (Regex.IsMatch(file, @"WarmDefHP\s*=\s*-?\d+", RegexOptions.Multiline))
+                WarmDefHP = Convert.ToInt32(Regex.Match(file, @"WarmDefHP\s*=\s*-?\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             // Warm Def options
             if (Regex.IsMatch(file, "UseWarmDef\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 UseWarmDef = Convert.ToInt32(Regex.Match(file, "UseWarmDef\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
@@ -306,10 +481,10 @@ namespace AzzyAIConfig
         {
             Program.WriteLine("Loading Skill Combo Options");
 
-            if (Regex.IsMatch(file, "ComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline))
-                ComboEnabled = Convert.ToInt32(Regex.Match(file, "ComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
-            if (Regex.IsMatch(file, "BlueprintComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline))
-                BlueprintComboEnabled = Convert.ToInt32(Regex.Match(file, "BlueprintComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
+            if (Regex.IsMatch(file, "^[ \\t]*ComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline))
+                ComboEnabled = Convert.ToInt32(Regex.Match(file, "^[ \\t]*ComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
+            if (Regex.IsMatch(file, "^[ \\t]*BlueprintComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline))
+                BlueprintComboEnabled = Convert.ToInt32(Regex.Match(file, "^[ \\t]*BlueprintComboEnabled\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             if (Regex.IsMatch(file, "ComboRunDuringChase\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 ComboRunDuringChase = Convert.ToInt32(Regex.Match(file, "ComboRunDuringChase\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             if (Regex.IsMatch(file, "ComboRunDuringAttack\\s*=\\s*-?\\d+", RegexOptions.Multiline))
@@ -609,11 +784,15 @@ namespace AzzyAIConfig
             
             // Body Double options
             file = WriteConfigValue(file, "UseBodyDouble", UseBodyDouble);
+            file = WriteConfigValue(file, "UseAutoBD", UseBodyDouble);
+            file = WriteConfigValue(file, "BodyDoubleCooldown", BodyDoubleCooldown);
+            file = WriteConfigValue(file, "BastionRenewalCooldown", BastionRenewalCooldown);
             file = WriteConfigValue(file, "BodyDoubleOwnerHP", BodyDoubleOwnerHP);
             
             // Warm Def options
             file = WriteConfigValue(file, "UseWarmDef", UseWarmDef);
             file = WriteConfigValue(file, "WarmDefCooldown", WarmDefCooldown);
+            file = WriteConfigValue(file, "WarmDefHP", WarmDefHP);
             
             // Master Swap options
             file = WriteConfigValue(file, "UseMasterSwap", UseMasterSwap);
@@ -956,7 +1135,7 @@ namespace AzzyAIConfig
             get { return _UseAvoid; }
             set { _UseAvoid = value; }
         }
-        static int _TankMonsterLimit = 4;
+        static int _TankMonsterLimit = 30;
         public static int TankMonsterLimit
         {
             get { return _TankMonsterLimit; }
@@ -1036,6 +1215,46 @@ namespace AzzyAIConfig
         //AutoSkill Options//
         /////////////////////
         // Kimi Skill Levels (0-10, 0 = disabled)
+        public static readonly Dictionary<int, int> KimiSkillLevels = new Dictionary<int, int>();
+        public static readonly Dictionary<int, int> KimiSkillEnabled = new Dictionary<int, int>();
+
+        public static int GetKimiSkillLevel(int skillId)
+        {
+            int level;
+            return KimiSkillLevels.TryGetValue(skillId, out level) ? level : 1;
+        }
+
+        public static bool GetKimiSkillEnabled(int skillId)
+        {
+            int enabled;
+            return KimiSkillEnabled.TryGetValue(skillId, out enabled) && enabled != 0;
+        }
+
+        static void ResetKimiSkillSettings()
+        {
+            KimiSkillLevels.Clear();
+            KimiSkillEnabled.Clear();
+            foreach (var skill in KimiSkills.GetActiveDefinitions())
+            {
+                KimiSkillLevels[skill.Id] = 1;
+                KimiSkillEnabled[skill.Id] = 0;
+            }
+        }
+
+        public static void SetKimiSkillSettings(IDictionary<int, int> levels, IDictionary<int, bool> enabled)
+        {
+            ResetKimiSkillSettings();
+            foreach (var skill in KimiSkills.GetActiveDefinitions())
+            {
+                int level;
+                bool isEnabled;
+                if (levels != null && levels.TryGetValue(skill.Id, out level))
+                    KimiSkillLevels[skill.Id] = KimiSkills.ClampLevel(skill.Id, level);
+                if (enabled != null && enabled.TryGetValue(skill.Id, out isEnabled))
+                    KimiSkillEnabled[skill.Id] = isEnabled ? 1 : 0;
+            }
+        }
+
         static int _illusionOfClawsLevel = 5;
         public static int illusionOfClawsLevel
         {
@@ -1483,6 +1702,8 @@ namespace AzzyAIConfig
         }
 
         // Body Double options
+        public static int BodyDoubleCooldown { get; set; }
+        public static int BastionRenewalCooldown { get; set; }
         static int _UseBodyDouble = 1;
         public static int UseBodyDouble
         {
@@ -1503,6 +1724,7 @@ namespace AzzyAIConfig
             get { return _UseWarmDef; }
             set { _UseWarmDef = value; }
         }
+        public static int WarmDefHP { get; set; } = 100;
         static int _WarmDefCooldown = 30;
         public static int WarmDefCooldown
         {
@@ -1697,6 +1919,16 @@ namespace AzzyAIConfig
         }
         #endregion
 
+        #region Navigation Options
+        public static int EnableDebugLogging { get; set; }
+        static string _NavigationMap = string.Empty;
+        public static string NavigationMap
+        {
+            get { return _NavigationMap; }
+            set { _NavigationMap = NavigationMapNames.Normalize(value); }
+        }
+        #endregion
+
         #region SetDefaults Method
         /// <summary>
         /// Reset all config values to their initial static defaults
@@ -1714,7 +1946,7 @@ namespace AzzyAIConfig
             DoNotChase = 0;
             UseDanceAttack = 0;
             UseAvoid = 0;
-            TankMonsterLimit = 4;
+            TankMonsterLimit = 30;
             RescueOwnerLowHP = 0;
             StationaryAggroDist = 0;
             MobileAggroDist = 0;
@@ -1747,6 +1979,10 @@ namespace AzzyAIConfig
             AutoComboMode = 0;
             AutoComboSpheres = 0;
 
+            // New Kimi skill settings use level 1 as the editable floor and an
+            // explicit enabled flag. New skills are present but disabled.
+            ResetKimiSkillSettings();
+
             // Walk and Follow Options
             FollowStayBack = 0;
             StationaryMoveBounds = 0;
@@ -1770,9 +2006,12 @@ namespace AzzyAIConfig
             ChaoticHealOwnerHP = 0;
             ChaoticHealKimiHP = 0;
             UseBodyDouble = 0;
+            BodyDoubleCooldown = 0;
+            BastionRenewalCooldown = 0;
             BodyDoubleOwnerHP = 0;
             UseWarmDef = 0;
             WarmDefCooldown = 0;
+            WarmDefHP = 100;
             UseMasterSwap = 0;
             MasterSwapOwnerHP = 0;
             MasterSwapCooldown = 0;
@@ -1832,6 +2071,10 @@ namespace AzzyAIConfig
 
             // PVP Options
             PVPmode = 0;
+
+            // Navigation Options
+            EnableDebugLogging = 0;
+            NavigationMap = string.Empty;
         }
         #endregion
     }

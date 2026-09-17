@@ -137,7 +137,7 @@ Berzerk_IgnoreMinSP      = 0
 StandbyFriending         = 1  
 MirAIFriending           = 1  
 UseAvoid		 = 0  
-TankMonsterLimit	= 4
+TankMonsterLimit	= 30
 AttackTimeLimit		= 0
 AggressiveRelogTracking = 0
 AggressiveRelogPath = "./AI_sakray/USER_AI/"
@@ -203,3 +203,7 @@ LogEnable["AAI_SKILLFAIL"]=0
 LogEnable["AAI_CLOSEST"]=0
 
 LogEnable["AAI_Lag"]=0
+WarmDefHP = 100 -- automatic Bastion Renewal self-HP threshold
+
+-- Select a map in KimiAIConfig before using static terrain navigation.
+NavigationMap = ""

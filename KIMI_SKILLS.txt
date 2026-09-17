@@ -1,0 +1,52 @@
+==============================================================================
+Ward Kimi  (class ID 6001)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8005   Master Swap            5      Active / Utility                 HAMI_CASTLE  [LOYAL]
+8006   Bastion Renewal        5      Active / Self Buff               HAMI_DEFENCE
+8007   Living Bulwark         5      Passive                          HAMI_SKIN
+8033   Ward's Domain          5      Active / Protection Aura         MH_STEINWAND
+8039   Retaliation            10     Passive / Counter AoE            MH_MAGMA_FLOW
+8021   Taunt                  5      Active / Self AoE                MH_PAIN_KILLER
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+==============================================================================
+Occult Kimi  (class ID 6002)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8005   Master Swap            5      Active / Utility                 HAMI_CASTLE  [LOYAL]
+8014   Chaotic Heal           5      Active / Recovery                HVAN_CHAOTIC
+8024   Illusion of Breath     10     Active / Neutral Magic           MH_ERASER_CUTTER
+8034   Illusion of Light      5      Active / Neutral Magic AoE       MH_HEILIGE_STANGE  [LOYAL]
+8013   Chaotic Sanctuary      5      Active / Ground Support          HVAN_CAPRICE
+8015   Arcane Offering        5      Active / Support                 HVAN_INSTRUCT
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+==============================================================================
+Agile Kimi  (class ID 6003)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8005   Master Swap            5      Active / Utility                 HAMI_CASTLE  [LOYAL]
+8009   Illusion of Claw       10     Active / Melee                   HFLI_MOON
+8010   Enhanced Reflexes      5      Passive                          HFLI_FLEET
+8011   Second Wind            10     Passive                          HFLI_SPEED
+8012   Fade Away              1      Active / Utility                 HFLI_SBR44
+8036   Mirage Assault         5      Active / Targeted Melee          MH_TINDER_BREAKER
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+
+==============================================================================
+Raging Kimi  (class ID 6004)
+==============================================================================
+ID     Name                   MaxLv  Type                             Internal name
+8031   Illusion Crusher       5      Active / Physical                MH_STAHL_HORN
+8032   Blood Sweep            10     Active / Melee AoE               MH_GOLDENE_FERSE
+8035   Blood Hunger           10     Passive / Blood Sweep Modifier   MH_ANGRIFFS_MODUS
+8037   Predator's Focus       1      Passive                          MH_CBC
+8038   Blood Frenzy           5      Passive                          MH_EQC
+8040   Ironblood              5      Passive                          MH_GRANITIC_ARMOR
+8023   Quick Defense          5      Active / Self Buff               MH_OVERED_BOOST
+8022   Body Double            5      Active / Self Buff               MH_LIGHT_OF_REGENE  [LOYAL]
+

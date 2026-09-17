@@ -1,3 +1,5 @@
+> **Return to Morroc Refuge testing build:** current installation and feature documentation is in [release-docs/README.md](release-docs/README.md). The older project overview below describes an earlier build.
+
 # AzzyAI - Kimi Edition
 
 Fork of AzzyAI optimized exclusively for **Kimi puppet** (Illusionist class) in Ragnarok Online's "Echoes of Morroc" server.

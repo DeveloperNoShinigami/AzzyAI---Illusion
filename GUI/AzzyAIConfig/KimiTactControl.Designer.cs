@@ -309,7 +309,7 @@
             this.comboBoxBasic.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboBoxBasic.FormattingEnabled = true;
             this.comboBoxBasic.Items.AddRange(new object[] {
-            "Tank",
+            "Tank - Pull",
             "Ignore",
             "Attack (low)",
             "Attack (medium)",
@@ -323,7 +323,8 @@
             "Snipe (high)",
             "Attack (low) React (medium)",
             "Attack (last)",
-            "Attack (top)"});
+            "Attack (top)",
+            "Tank - Gather"});
             this.comboBoxBasic.Location = new System.Drawing.Point(99, 10);
             this.comboBoxBasic.Name = "comboBoxBasic";
             this.comboBoxBasic.Size = new System.Drawing.Size(227, 21);

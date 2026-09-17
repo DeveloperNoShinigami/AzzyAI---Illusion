@@ -1,4 +1,4 @@
-﻿// MainForm.cs
+// MainForm.cs
 //
 // Programmed by Machiavellian of iRO Chaos
 //
@@ -33,8 +33,14 @@ namespace AzzyAIConfig
 
         void SaveChanges()
         {
+            // Refresh the shipped runtime before saving GUI settings so a
+            // deployed GUI can repair/update USER_AI without manual Lua work.
+            RuntimeFiles.Install();
+
             // Save the Kimi configurations
+            _comboProfiles.ApplySelected();
             _kconf.Save();
+            _comboProfiles.Save(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "H_Config.lua"));
             kimiTactControl1.Save();
             comboTactControl1.SaveSettings();
             extraControl1.Save();
@@ -42,8 +48,6 @@ namespace AzzyAIConfig
             
             // Also generate H_SkillList.lua (Kimi-only) next to the EXE
             SkillList.Save(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "H_SkillList.lua"));
-            // Files are saved to the current working directory (config tool folder).
-            // Copying to USER_AI is manual per workflow.
         }
         
 
@@ -51,9 +55,10 @@ namespace AzzyAIConfig
         {
             // Force create a fresh KimiConf instance that loads from file
             _kconf = new KimiConf();
+            InitializeKimiTabs();
             
             // Set the propertyGridKimi selected object to the Kimi configurations
-            propertyGridKimi.SelectedObject = _kconf;
+            propertyGridKimi.SelectedObject = new KimiSettingsView(_kconf, 0);
             
             // Load combo tactics settings
             comboTactControl1.LoadSettings();
@@ -142,22 +147,31 @@ namespace AzzyAIConfig
         {
             // Revert the Kimi configurations
             _kconf.Revert();
+            _comboProfiles.Load(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "H_Config.lua"));
+            RefreshKimiGrids();
         }
 
         private void resetToDefaultsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             // Reset the Kimi configurations to defaults
             _kconf.SetDefaults();
+            _comboProfiles.Reset();
+            RefreshKimiGrids();
+            ConfigChanged(this, EventArgs.Empty);
         }
 
         private void documentationToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            // Check if the documentation file exists
-            if (System.IO.File.Exists("Documentation.pdf"))
+            // Prefer the bundled browser-readable manual; retain the legacy PDF fallback.
+            string documentation = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Documentation.html");
+            if (!System.IO.File.Exists(documentation))
+                documentation = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Documentation.pdf");
+            if (System.IO.File.Exists(documentation))
             {
                 // Start a new process to open the documentation file
                 System.Diagnostics.Process p = new System.Diagnostics.Process();
-                p.StartInfo.FileName = "Documentation.pdf";
+                p.StartInfo.FileName = documentation;
+                p.StartInfo.UseShellExecute = true;
                 p.Start();
             }
             // If the documentation file does not exist
@@ -197,11 +211,23 @@ namespace AzzyAIConfig
             // Show the dialog and check if the result is OK
             if (ofd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                // Open the file
-                _kconf.Open(ofd.FileName);
+                try
+                {
+                    // Open the file
+                    _kconf.Open(ofd.FileName);
+                    _comboProfiles.Load(ofd.FileName);
+                    RefreshKimiGrids();
 
-                // Update the propertyGridKimi values
-                propertyGridKimi.Update();
+                    // Refresh the property grid and mark the imported values
+                    // as pending until the user clicks Apply.
+                    propertyGridKimi.Refresh();
+                    ConfigChanged(this, EventArgs.Empty);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not import Kimi settings:\n\n" + ex.Message,
+                                    "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -244,8 +270,18 @@ namespace AzzyAIConfig
             // Show the dialog and check if the result is OK
             if (sfd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                // Save the file
-                _kconf.Save(sfd.FileName);
+                try
+                {
+                    // Save the file
+                    _comboProfiles.ApplySelected();
+                    _kconf.Save(sfd.FileName);
+                    _comboProfiles.Save(sfd.FileName);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not export Kimi settings:\n\n" + ex.Message,
+                                    "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 

@@ -149,6 +149,7 @@ TACT_CHASE = 13
 ---------------------------
 --Tactics (responce to monster)
 ---------------------------
+TACT_TANK_GATHER = -3
 TACT_TANKMOB = -2
 TACT_TANK	= -1
 TACT_IGNORE	= 0	-- Do not attack the monster 

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -79,6 +79,7 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
+    <Reference Include="System.Design" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
@@ -125,6 +126,12 @@
       <DependentUpon>ComboTactControl.cs</DependentUpon>
     </Compile>
     <Compile Include="SkillList.cs" />
+    <Compile Include="KimiComboProfiles.cs" />
+    <Compile Include="KimiTabs.cs" />
+    <EmbeddedResource Include="KimiArt\agile.png"><LogicalName>AzzyAIConfig.KimiArt.agile.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="KimiArt\occult.png"><LogicalName>AzzyAIConfig.KimiArt.occult.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="KimiArt\raging.png"><LogicalName>AzzyAIConfig.KimiArt.raging.png</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="KimiArt\ward.png"><LogicalName>AzzyAIConfig.KimiArt.ward.png</LogicalName></EmbeddedResource>
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -138,6 +145,8 @@
     <Compile Include="Defaults.cs" />
     <Compile Include="H_Config.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="RuntimeFiles.cs" />
+    <Compile Include="NavigationMap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="AzzyAIAboutBox.resx">
       <DependentUpon>AzzyAIAboutBox.cs</DependentUpon>
@@ -167,49 +176,136 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <None Include="AzzyAIConfig_TemporaryKey.pfx" />
-    <None Include="Defaults.lua">
+    <None Include="..\..\USER_AI\Defaults.lua">
+      <Link>Defaults.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="H_Config.lua">
+    <None Include="..\..\USER_AI\H_Config.lua">
+      <Link>H_Config.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="H_Extra.lua">
+    <None Include="..\..\USER_AI\H_Extra.lua">
+      <Link>H_Extra.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="H_Tactics.lua">
+    <None Include="..\..\USER_AI\H_Tactics.lua">
+      <Link>H_Tactics.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="H_PVP_Tact.lua">
+    <None Include="..\..\USER_AI\H_PVP_Tact.lua">
+      <Link>H_PVP_Tact.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="H_SkillList.lua">
+    <None Include="..\..\USER_AI\H_SkillList.lua">
+      <Link>H_SkillList.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="H_Avoid.lua">
+    <EmbeddedResource Include="..\..\USER_AI\AI.lua">
+      <Link>USER_AI\AI.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.AI.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\AI_main.lua">
+      <Link>USER_AI\AI_main.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.AI_main.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\AzzyUtil.lua">
+      <Link>USER_AI\AzzyUtil.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.AzzyUtil.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\Const_.lua">
+      <Link>USER_AI\Const_.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.Const_.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\Defaults.lua">
+      <Link>USER_AI\Defaults.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.Defaults.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\H_Config.lua">
+      <Link>USER_AI\H_Config.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.H_Config.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\KimiNavigation.lua">
+      <Link>USER_AI\KimiNavigation.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.KimiNavigation.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\NavigationData.txt">
+      <Link>USER_AI\NavigationData.txt</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.NavigationData.txt</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\NavigationMaps.txt">
+      <Link>USER_AI\NavigationMaps.txt</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.NavigationMaps.txt</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\H_Extra.lua">
+      <Link>USER_AI\H_Extra.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.H_Extra.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\H_Tactics.lua">
+      <Link>USER_AI\H_Tactics.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.H_Tactics.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\H_PVP_Tact.lua">
+      <Link>USER_AI\H_PVP_Tact.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.H_PVP_Tact.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\H_Avoid.lua">
+      <Link>USER_AI\H_Avoid.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.H_Avoid.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\H_SkillList.lua">
+      <Link>USER_AI\H_SkillList.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.H_SkillList.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\A_Friends.lua">
+      <Link>USER_AI\A_Friends.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.A_Friends.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\Stubs.lua">
+      <Link>USER_AI\Stubs.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.Stubs.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\Mob_ID.lua">
+      <Link>USER_AI\Mob_ID.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.Mob_ID.lua</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\USER_AI\twRO.lua">
+      <Link>USER_AI\twRO.lua</Link>
+      <LogicalName>AzzyAIConfig.USER_AI.twRO.lua</LogicalName>
+    </EmbeddedResource>
+    <None Include="..\..\USER_AI\H_Avoid.lua">
+      <Link>H_Avoid.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="AI.lua">
+    <None Include="..\..\USER_AI\AI.lua">
+      <Link>AI.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="AI_main.lua">
+    <None Include="..\..\USER_AI\AI_main.lua">
+      <Link>AI_main.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="AI_M.lua">
+    <None Include="..\..\USER_AI\AI_M.lua">
+      <Link>AI_M.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="AzzyUtil.lua">
+    <None Include="..\..\USER_AI\AzzyUtil.lua">
+      <Link>AzzyUtil.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="Const_.lua">
+    <None Include="..\..\USER_AI\Const_.lua">
+      <Link>Const_.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="A_Friends.lua">
+    <None Include="..\..\USER_AI\A_Friends.lua">
+      <Link>A_Friends.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="Stubs.lua">
+    <None Include="..\..\USER_AI\Stubs.lua">
+      <Link>Stubs.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="Mob_ID.lua">
+    <None Include="..\..\USER_AI\Mob_ID.lua">
+      <Link>Mob_ID.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="Properties\app.manifest" />
@@ -222,7 +318,8 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <None Include="H_PVP_Tact.lua">
+    <None Include="..\..\USER_AI\H_PVP_Tact.lua">
+      <Link>H_PVP_Tact.lua</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

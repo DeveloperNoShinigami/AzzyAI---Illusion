@@ -244,6 +244,9 @@ function GetTargetClass(id)
 		return 1
 	elseif id == 0 then
 		return 0
+	-- Server actor ID ranges differ; recognize the owner/friends first.
+	elseif IsFriendOrSelf(id)==1 then
+		return 2
 	elseif (id > MagicNumber2) then
 		if IsFriendOrSelf(id)==1 then
 			return 2
@@ -353,12 +356,16 @@ function GetMobCount(skill,level,target,aggro)
 	if skill==0 or level==0 then 
 		return 0
 	end
-	local skillaoe=SkillAOEInfo[skill][1][level]
+	local aoeInfo = SkillAOEInfo[skill]
+	if aoeInfo == nil or aoeInfo[1] == nil or aoeInfo[1][level] == nil or aoeInfo[1][level] <= 0 then
+		return 0
+	end
+	local skillaoe=aoeInfo[1][level]
 	local x,y=GetV(V_POSITION,MyID)
 	if GetSkillInfo(skill,7)==0 then
 		target=MyID
 	end
-	range=(skillaoe-1)/2
+	local range = aoeInfo[3] == "radius" and skillaoe or (skillaoe-1)/2
 	local logstring=""
 	for k,v in pairs(Targets) do
 		local tbas=GetTact(TACT_BASIC,k)
@@ -390,7 +397,8 @@ function GetBestAoECoord(myid,skill,level)
 	local resultx = -1
 	local resulty = -1
 	local range=GetSkillInfo(skill,2,level)
-	local aoesize=(SkillAOEInfo[skill][1][level]-1)/2
+	local aoeInfo = SkillAOEInfo[skill]
+    local aoesize = aoeInfo[3] == "radius" and aoeInfo[1][level] or (aoeInfo[1][level]-1)/2
 	local myx
 	local myy
 	myx,myy=GetV(V_POSITION,myid)
@@ -798,18 +806,23 @@ end
 OldMove=Move
 
 function Move(myid,x,y)
+	if NavigationReady and NavigationReady() then
+        local nx,ny=NavigationWaypoint(myid,x,y,0)
+        if nx then return NavigationMove(myid,nx,ny) end
+        return -- Never fall back to a move through a known wall.
+    end
 	local ox,oy = GetV(V_POSITION,myid)
 	local dis = GetDistance(ox,oy,x,y)
 	local dis2owner=GetDistanceAPR(GetV(V_OWNER,myid),x,y)
 	local newx,newy=x,y
-	if dis2owner > 14 then 
+	if dis2owner > math.min(100,GetMoveBounds()) then 
 		logappend("AAI_ERROR","Attempt to move to location "..x..","..y.." which is "..dis2owner.." cells from owner, call disregarded")
 		return 
 	elseif dis > 15  then
 		--factor = 14/dis
-		factor=0.5+((math.random(3)-2)*0.1)
+		factor=math.min(14/dis,0.5+((math.random(3)-2)*0.1))
 		if dis > 25 then 
-			factor =0.4+((math.random(3)-2)*0.1)
+			factor =math.min(14/dis,0.4+((math.random(3)-2)*0.1))
 		end
 		local dx,dy = x-ox,y-oy
 		if math.random(2)==1 then
@@ -857,18 +870,66 @@ function Move(myid,x,y)
 end
 
 
+local function GetEffectiveKimiCastDelay(skill, level)
+	local castDelayBase = (GetSkillInfo(skill, 4, level) or 0)
+	local castDelayJitter = (GetSkillInfo(skill, 5, level) or 0)
+	local isKimiSkill = KimiSkillMetadata and KimiSkillMetadata[tonumber(skill)] ~= nil
+	-- In skill-only mode, keep spell timing to cast animation/rate only.
+	-- Prevent extra user cooldown delay from stacking onto Kimi cast cycles.
+	local configDelay = 0
+	if UseSkillOnly ~= 1 or not isKimiSkill then
+		configDelay = (AutoSkillDelay or 0)
+	end
+	return castDelayBase + castDelayJitter * 0.5 + configDelay
+end
+
+local function KimiCastAllowed(skill, level, myid)
+	if not (KimiSkillMetadata and KimiSkillMetadata[skill]) then return true, level end
+	local canCast, resolvedLevel, reason = KimiSkillCanCast(skill, level, myid)
+	if not canCast then
+		logappend("AAI_ERROR", "Kimi skill "..tostring(skill).." rejected: "..tostring(reason))
+		return false, 0
+	end
+	return true, resolvedLevel
+end
+
+-- Direct wrapper calls do not pass through DoSkill, so they stamp their own
+-- local timing after dispatch. DoSkill sets KimiSkillDispatching while it
+-- calls the wrapper and remains the single stamper for normal AI casts.
+local function StampDirectKimiSkill(skill, level)
+	if not (KimiSkillMetadata and KimiSkillMetadata[skill]) then return end
+	local fixed = GetSkillInfo(skill, 4, level) or 0
+	local variable = GetSkillInfo(skill, 5, level) or 0
+	local castDelay = GetEffectiveKimiCastDelay(skill, level)
+	AutoSkillCooldown[skill] = GetTick() + GetKimiSkillReuseDelay(skill, level) + castDelay
+end
+
 OldSkillObject=SkillObject
 function SkillObject(myid,lvl,skill,target)
-	if skill==8041 or skill==8043 or skill==8020 or skill==8025 then
+	local allowed, resolvedLevel = KimiCastAllowed(skill, lvl, myid)
+	if not allowed then
+		return 0
+	elseif skill==8041 or skill==8043 or skill==8020 or skill==8025 then
 		logappend("AAI_ERROR","Attempted to use skill "..SkillInfo[skill][1].." improperly. Check for corrupt H_SkillInfo or badly behaved addon")
 	else
+		lvl = resolvedLevel
+		if KimiSkillMetadata and KimiSkillMetadata[skill] then
+			if GetKimiSkillTargetMode(skill) == 2 then
+				logappend("AAI_ERROR", "Ground-target Kimi skill "..tostring(skill).." sent through SkillObject")
+				return 0
+			end
+			target = GetKimiSkillTarget(skill, target, myid)
+		end
 		if (LagReduction and LagReduction ~=0) then
 			modtwROSkillObjectID=skill
 			modtwROSkillObjectLV=lvl
 			modtwROSkillObjectTarg=target
 		else
-			return OldSkillObject(myid,lvl,skill,target)
+			local result = OldSkillObject(myid,lvl,skill,target)
+			if result ~= 0 and not KimiSkillDispatching then StampDirectKimiSkill(skill, lvl) end
+			return result
 		end
+		if not KimiSkillDispatching then StampDirectKimiSkill(skill, lvl) end
 	end
 end
 
@@ -876,6 +937,9 @@ OldAttack=Attack
 function Attack(myid,target)
 	if SuperPassive==1 then
 		TraceAI("Notice: Attack() called while in SuperPassive. MyEnemy "..MyEnemy.." MyState "..MyState)
+	end
+	if UseSkillOnly == 1 then
+		return 0
 	end
 	if (LagReduction and LagReduction ~=0) then
 		modtwROAttackTarget=target
@@ -886,14 +950,25 @@ end
 
 OldSkillGround=SkillGround
 function SkillGround(myid,lvl,skill,x,y)
-	if (LagReduction and LagReduction ~=0) then
+	local allowed, resolvedLevel = KimiCastAllowed(skill, lvl, myid)
+	if not allowed then
+		return 0
+	end
+	lvl = resolvedLevel
+	if KimiSkillMetadata and KimiSkillMetadata[skill] and GetKimiSkillTargetMode(skill) ~= 2 then
+		logappend("AAI_ERROR", "Object-target Kimi skill "..tostring(skill).." sent through SkillGround")
+		return 0
+	elseif (LagReduction and LagReduction ~=0) then
 		modtwROSkillGroundX=x
 		modtwROSkillGroundY=y
 		modtwROSkillGroundID=skill
 		modtwROSkillGroundLV=lvl
 	else
-		return OldSkillGround(myid,lvl,skill,x,y)
+		local result = OldSkillGround(myid,lvl,skill,x,y)
+		if result ~= 0 and not KimiSkillDispatching then StampDirectKimiSkill(skill, lvl) end
+		return result
 	end
+	if not KimiSkillDispatching then StampDirectKimiSkill(skill, lvl) end
 end
 
 function	GetDistance (x1,y1,x2,y2)
@@ -1036,6 +1111,10 @@ end
 
 
 function BetterMoveToOwner(myid,range)
+    if NavigationReady and NavigationReady() then
+        NavigationReturnToOwner(myid,range)
+        return
+    end
 	if (range==nil) then
 		range=1
 	end
@@ -1185,6 +1264,10 @@ end
 
 
 function AttackRange(myid,skill,level)
+	if myid == MyID and (skill == nil or skill == 0) and GetComboRangeSkill then
+		local comboSkill,comboLevel = GetComboRangeSkill(myid)
+		if comboSkill ~= nil then skill,level = comboSkill,comboLevel end
+	end
 	if (skill==nil or level== nil) then
 		if skill==nil or level==nil then
 			logappend("AAI_ERROR","AttackRange called with invalid arguments State:"..STATE_NAME[MyState].." MySkill "..MySkill.." MySkillLevel"..MySkillLevel.." skill: "..formatval(skill).." level: "..formatval(level))
@@ -1192,7 +1275,11 @@ function AttackRange(myid,skill,level)
 		skill=MySkill
 		level=MySkillLevel
 	end
-	local a     = 0
+	local meta = KimiSkillMetadata and KimiSkillMetadata[skill]
+    if meta and meta.targetMode == 0 and meta.aoeRadius and meta.aoeRadius[level] then
+        return meta.aoeRadius[level]
+    end
+    local a     = 0
 	if (skill == 0) then
 		a     = GetV(V_ATTACKRANGE,myid)
 	else
@@ -1648,109 +1735,38 @@ end
 --### GetSkill functions###
 --#########################
 
+-- Shared with AI_main.lua healing; must be visible across Lua files.
+function GetReadyKimiSkill(skillid, myid)
+	if not (KimiSkillMetadata and KimiSkillMetadata[skillid]) then return 0, 0 end
+	local level = GetKimiSkillLevel(skillid, nil, myid)
+	if level <= 0 then return 0, 0 end
+	if AutoSkillCooldown[skillid] and GetTick() < AutoSkillCooldown[skillid] then return 0, 0 end
+	return skillid, level
+end
+
 function GetSAtkSkill(myid)
-	local skill = 0
-	local level = 0
-	if (IsHomun(myid)==1) then
-		if level ~=0 then
-			return skill,level
-		end
-	end
-	return 0,0
+	-- Kimi utility/self skills are selected through buff/heal paths; no
+	-- separate sniping slot is needed.
+	return 0, 0
 end
 
 function GetAtkSkill(myid)
-	local skill = 0
-	local level = 0
-	if (IsHomun(myid) == 1) then
-		homunculuType = GetV(V_HOMUNTYPE,myid)
-		local aggro = GetAggroCount()
-
-		if (onlyAOE == 1 and illusionOfLightLevel > 0) then
-			skill = S_ILLUSION_OF_LIGHT
-
-			if (GetTick() < AutoSkillCooldown[skill]) then
-				level = 0
-				skill = 0
-			elseif (illusionOfLightLevel == nil) then
-				level = 10
-			else
-				level = illusionOfLightLevel
-			end
-		else
-			if (homunculuType == OCCULT) then
-				if (illusionOfBreathLevel > 0) then
-					skill = S_ILLUSION_OF_BREATH
-
-					if (GetTick() < AutoSkillCooldown[skill]) then
-						level = 0
-						skill = 0
-					elseif (illusionOfBreathLevel == nil) then
-						level = 10
-					else
-						level = illusionOfBreathLevel
-					end
-				elseif (illusionOfLightLevel > 0) then
-					skill = S_ILLUSION_OF_LIGHT
-
-					if (GetTick() < AutoSkillCooldown[skill]) then
-						level = 0
-						skill = 0
-					elseif (illusionOfLightLevel == nil) then
-						level = 10
-					else
-						level = illusionOfLightLevel
-					end
-				end
-
-				if (aggro >= AutoMobCount and illusionOfLightLevel > 0) then
-					skill = S_ILLUSION_OF_LIGHT
-
-					if (GetTick() < AutoSkillCooldown[skill]) then
-						level = 0
-						skill = 0
-					elseif (illusionOfLightLevel == nil) then
-						level = 10
-					else
-						level = illusionOfLightLevel
-					end
-				end
-			else
-				if (illusionOfClawsLevel > 0) then
-					skill = S_ILLUSION_OF_CLAWS
-
-					if (illusionOfClawsLevel == 0) then
-						level = 0
-					elseif (GetTick() < AutoSkillCooldown[skill]) then
-						level = 0
-						skill = 0
-					elseif (illusionOfClawsLevel == nil) then
-						level = 5
-					else
-						level = illusionOfClawsLevel
-					end
-				else
-					skill = S_ILLUSION_CRUSHER
-
-					if (illusionOfCrusherLevel == 0) then
-						level = 0
-					elseif (GetTick() < AutoSkillCooldown[skill]) then
-						level = 0
-						skill = 0
-					elseif (illusionOfCrusherLevel == nil) then
-						level = 5
-					else
-						level = illusionOfCrusherLevel
-					end
-				end
-			end
-		end
-
-		if (level ~= 0) then
-			return skill, level
-		end
+	if IsHomun(myid) ~= 1 then return 0, 0 end
+	local kimiType = GetKimiType(myid)
+	if onlyAOE == 1 and kimiType ~= AGILE then
+		return GetMobSkill(myid)
 	end
-
+	if kimiType == OCCULT then
+		local skill, level = GetReadyKimiSkill(S_ILLUSION_OF_BREATH, myid)
+		if skill ~= 0 then return skill, level end
+		return GetReadyKimiSkill(S_ILLUSION_OF_LIGHT, myid)
+	elseif kimiType == AGILE then
+		local skill, level = GetReadyKimiSkill(S_ILLUSION_OF_CLAWS, myid)
+		if skill ~= 0 then return skill, level end
+		return GetReadyKimiSkill(S_MIRAGE_ASSAULT, myid)
+	elseif kimiType == RAGING then
+		return GetReadyKimiSkill(S_ILLUSION_CRUSHER, myid)
+	end
 	return 0, 0
 end
 
@@ -1770,54 +1786,22 @@ function GetPushbackSkill(myid)
 end
 
 function GetMobSkill(myid)
-	local skill = 0
-	local level = 0
-
-	if (IsHomun(myid)==1) then
-		homunculuType = GetV(V_HOMUNTYPE,MyID)
-		
-		if (homunculuType == OCCULT) then
-			skill = S_ILLUSION_OF_LIGHT
-
-			if (illusionOfLightLevel == nil) then
-				level = 5
-			else
-				level = illusionOfLightLevel
-			end
-		end
-		if AutoSkillCooldown[skill]~=nil then
-			if GetTick() < AutoSkillCooldown[skill] then -- in cooldown
-				level=0
-				skill=0
-			end
-		end
-
-		return skill,level
+	if IsHomun(myid) ~= 1 then return 0, 0 end
+	local kimiType = GetKimiType(myid)
+	if kimiType == WARD then
+		return GetReadyKimiSkill(S_TAUNT, myid)
+	elseif kimiType == OCCULT then
+		return GetReadyKimiSkill(S_ILLUSION_OF_LIGHT, myid)
+	elseif kimiType == RAGING then
+		return GetReadyKimiSkill(S_BLOOD_SWEEP, myid)
 	end
-
-	return 0,0
+	return 0, 0
 end
 
 
 function GetQuickenSkill(myid)
-	local level = 0
-	local skill = S_BODY_DOUBLE
-
-	if (bodyDoubleLevel == 0) then
-		level = 0
-	elseif (bodyDoubleLevel == nil and bodyDoubleLevel > 0) then
-		level = 5
-	else
-		level = bodyDoubleLevel
-	end
-	if (AutoSkillCooldown[skill] ~= nil) then
-		if (GetTick() < AutoSkillCooldown[skill]) then -- in cooldown
-			level=0
-			skill=0
-		end
-	end
-
-	return skill, level
+	-- Body Double has its own HP-based scheduler.
+	return GetReadyKimiSkill(S_QUICK_DEFENSE, myid)
 end
 
 function GetGuardSkill(myid)
@@ -1825,17 +1809,11 @@ function GetGuardSkill(myid)
 	local skill = 0
 
 	if (IsHomun(myid) == 1) then
-		skill = S_WARM_DEF
-
-		if (warmDefLevel == 0) then
-			level = 0
-		elseif (warmDefLevel == nil and warmDefLevel > 0) then
-			level = 5
-		else
-			level = warmDefLevel
+		if GetKimiType(myid) == WARD then
+			-- Bastion Renewal is scheduled by DoHealingTasks and its HP threshold.
+			return GetReadyKimiSkill(S_WARD_DOMAIN, myid)
 		end
-
-		return skill, level
+		return 0, 0
 	else
 		for i,v in ipairs(GuardSkillList) do
 			level = SkillList[MercType][v]
@@ -1856,16 +1834,8 @@ function GetHealingSkill(myid)
 	local skill = 0
 
 	if (IsHomun(myid) == 1) then
-		skill = S_CHAOTIC_HEAL
-
-		if (chaoticHealLevel == 0) then
-			level = 0
-		elseif (GetTick() < AutoSkillCooldown[skill]) then
-			level = 0
-		elseif (chaoticHealLevel == nil and chaoticHealLevel > 0) then
-			level = 5
-		else
-			level = chaoticHealLevel
+		if GetKimiType(myid) == OCCULT then
+			return GetReadyKimiSkill(S_CHAOTIC_HEAL, myid)
 		end
 	end
 
@@ -1991,26 +1961,43 @@ function KiteOK(myid)
 end
 
 function DoSkill(skill, level, target, mode, targx, targy)
-	TraceAI("doskill called skill:"..skill.."level:"..level.."target"..target)
+	TraceAI("doskill called skill:"..tostring(skill).." level:"..tostring(level).." target:"..tostring(target))
 
 	if skill==0 or level==0 or skill==nil or level==nil then
-		logappend("AAI_ERROR","doskill called skill:"..skill.."level:"..level.."target"..target.."mode"..mode.."state "..STATE_NAME[MyState].."pstate "..MyPState)
+		logappend("AAI_ERROR","doskill called skill:"..tostring(skill).." level:"..tostring(level).." target:"..tostring(target).." mode"..tostring(mode).." state "..tostring(STATE_NAME[MyState]).." pstate "..tostring(MyPState))
 		return 0
 	end
-	targetMode = GetSkillInfo(skill, 7)
 
+	-- Central Kimi gate protects every caller, including legacy selectors and
+	-- command handlers. The client owns learned/loyalty validation.
+	local kimiMeta = KimiSkillMetadata and KimiSkillMetadata[skill]
+	if kimiMeta then
+		local canCast, resolvedLevel, reason = KimiSkillCanCast(skill, level, MyID)
+		if not canCast then
+			TraceAI("DoSkill: Kimi skill "..tostring(skill).." rejected: "..tostring(reason))
+			return 0
+		end
+		level = resolvedLevel
+		target = GetKimiSkillTarget(skill, target, MyID)
+	end
+	targetMode = kimiMeta and GetKimiSkillTargetMode(skill) or GetSkillInfo(skill, 7)
+	local issued
+
+	KimiSkillDispatching = true
 	if (targetMode == 0) then
-		SkillObject(MyID, level, skill, MyID)
+		issued = SkillObject(MyID, level, skill, MyID)
 	elseif (targetMode == 1) then
-		SkillObject(MyID, level, skill, target)
+		issued = SkillObject(MyID, level, skill, target or MyID)
 	elseif (targetMode == 2) then
 		if (targx == nil) then
-			positionX, positionY = GetV(V_POSITION,target)
-			SkillGround(MyID, level, skill, positionX, positionY)
+			positionX, positionY = GetV(V_POSITION,target or MyID)
+			issued = SkillGround(MyID, level, skill, positionX, positionY)
 		else
-			SkillGround(MyID, level, skill, targx, targy)
+			issued = SkillGround(MyID, level, skill, targx, targy)
 		end
 	end
+	KimiSkillDispatching = false
+	if issued == 0 then return 0 end
 	if (mode ~= nil) then
 		if (mode > 0) then
 			CastSkillMode = mode
@@ -2028,8 +2015,8 @@ function DoSkill(skill, level, target, mode, targx, targy)
 	local fixedCastSkill = GetSkillInfo(skill, 4, level)
 	local variableCastSkill = GetSkillInfo(skill, 5, level)
 	local skillDelay = GetSkillInfo(skill, 6, level)
-	local skillReuseDelay = GetSkillInfo(skill, 9, level)
-	delay = AutoSkillDelay + fixedCastSkill + variableCastSkill * 0.5
+	local skillReuseDelay = kimiMeta and GetKimiSkillReuseDelay(skill, level) or GetSkillInfo(skill, 9, level)
+	delay = GetEffectiveKimiCastDelay(skill, level)
 	AutoSkillCastTimeout = delay + timeTick
 
 	if (AutoSkillCooldown[skill] ~= nil) then
@@ -2039,14 +2026,15 @@ function DoSkill(skill, level, target, mode, targx, targy)
 	AutoSkillTimeout = timeTick + delay
 
 	if (AutoSkillCooldown[skill] ~= nil) then
-		TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..target.." mode:"..targetMode.." delay "..delay.." cooldown: "..AutoSkillCooldown[skill]-GetTick())
+		TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..tostring(target).." mode:"..tostring(targetMode).." delay "..delay.." cooldown: "..AutoSkillCooldown[skill]-GetTick())
 	else
-		TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..target.." mode:"..targetMode.." delay "..delay)
+		TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..tostring(target).." mode:"..tostring(targetMode).." delay "..delay)
 	end
-	TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..target.." mode:"..targetMode.." delay "..delay)
-	logappend("AAI_SKILLFAIL", "DoSkill: "..FormatSkill(skill, level)..", target: "..target..", mode: "..targetMode..", delay: "..delay.. ", cooldown: "..AutoSkillCooldown[skill]-GetTick())
+	TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..tostring(target).." mode:"..tostring(targetMode).." delay "..delay)
+	local cooldownRemaining = AutoSkillCooldown[skill] and (AutoSkillCooldown[skill]-GetTick()) or 0
+	logappend("AAI_SKILLFAIL", "DoSkill: "..FormatSkill(skill, level)..", target: "..tostring(target)..", mode: "..tostring(targetMode)..", delay: "..delay.. ", cooldown: "..cooldownRemaining)
 
-	return
+	return 1
 end
 
 function modtwroSend()
@@ -2062,7 +2050,7 @@ function modtwroSend()
 		if modtwRODidMove==0 then
 			if modtwROMoveX~=0 then
 				logappend("AAI_Lag","Calling Move function, didmove=0")
-				OldMove(MyID,modtwROMoveX,modtwROMoveY)
+				if NavigationReady and NavigationReady() then Move(MyID,modtwROMoveX,modtwROMoveY) else OldMove(MyID,modtwROMoveX,modtwROMoveY) end
 				LagReductionCD=LagReduction
 				modtwRODidMove=1
 				modtwRODidAttack=0
@@ -2200,9 +2188,11 @@ function formatval (val)
 end
 
 function logappend (filename,message)
+	if EnableDebugLogging ~= 1 then return end
 	if LogEnable[filename]==1 then
 		TraceAI("Logging "..filename.." - "..message)
 		outfile = io.open(ConfigPath.."ErrorLog/"..filename..".log", "a")
+		if not outfile then return end
 		outfile:seek("end")
 		if filename=="AAI_SKILLFAIL" then
 			outfile:write(os.date("%c").." ("..GetTick()..") "..TypeString..STATE_NAME[MyState].."\t"..message.."\n")

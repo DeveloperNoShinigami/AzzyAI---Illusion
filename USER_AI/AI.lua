@@ -21,6 +21,7 @@ dofile("./AI_sakray/USER_AI/Stubs.lua")
 dofile("./AI_sakray/USER_AI/A_Friends.lua")
 dofile("./AI_sakray/USER_AI/H_Config.lua")
 dofile("./AI_sakray/USER_AI/H_Tactics.lua")
+dofile("./AI_sakray/USER_AI/KimiNavigation.lua")
 dofile("./AI_sakray/USER_AI/AI_main.lua")
 dofile("./AI_sakray/USER_AI/H_PVP_Tact.lua")
 dofile("./AI_sakray/USER_AI/H_Avoid.lua")
@@ -52,6 +53,7 @@ end
 
 -- Main logging function - writes to ERROR log with timestamp
 function TraceAI(message)
+	if EnableDebugLogging ~= 1 then return end
 	-- Write to error log in ErrorLog folder
 	local logFile = io.open(errorLogFile, "a")
 	if logFile then
@@ -70,6 +72,7 @@ end
 -- Category-specific logging (uses LogEnable table from H_Extra.lua)
 -- Writes to both error log and category-specific log files
 function LogToCategory(category, message)
+	if EnableDebugLogging ~= 1 then return end
 	if LogEnable and LogEnable[category] == 1 then
 		-- Write to general error log
 		TraceAI("[" .. category .. "] " .. message)
@@ -88,14 +91,14 @@ EnsureLogDir()
 TraceAI("=== KimiAI Startup ===")
 
 function WriteStartupLog(Version,ErrorCode,ErrorInfo)
-	local verspattern="%d.%d%d"
+	local verspattern="%d+%.%d+"
 	if AUVersion==nil then
 		AUVersion="1.30b or earlier"
 		ErrorCode="File version error"
 		ErrorInfo=ErrorInfo.."AzzyUtil.lua no version found"
 	elseif string.gfind(AUVersion,verspattern)()~="1.6" then
 		ErrorCode="File version error"
-		ErrorInfo=ErrorInfo.."AzzyUtil.lua wrong version "..string.gfind(AUVersion,verspattern)().."\n"
+		ErrorInfo=ErrorInfo.."AzzyUtil.lua wrong version "..tostring(AUVersion).."\n"
 	end
 	TestFile=io.open("./AI_sakray/USER_AI/data/test.txt","w")
 	if TestFile~=nil then
@@ -110,7 +113,7 @@ function WriteStartupLog(Version,ErrorCode,ErrorInfo)
 		ErrorInfo=ErrorInfo.."Const_.lua no version found"
 	elseif string.gfind(CVersion,verspattern)()~="1.7" then
 		ErrorCode="File version error"
-		ErrorInfo=ErrorInfo.."Const_.lua wrong version "..string.gfind(CVersion,verspattern)().."\n"
+		ErrorInfo=ErrorInfo.."Const_.lua wrong version "..tostring(CVersion).."\n"
 	end
 	if MainVersion==nil then
 		MainVersion="1.30b or earlier"
@@ -118,7 +121,7 @@ function WriteStartupLog(Version,ErrorCode,ErrorInfo)
 		ErrorInfo=ErrorInfo.." AI_main.lua no version found"
 	elseif string.gfind(MainVersion,verspattern)()~="1.7" then
 		ErrorCode="File version error"
-		ErrorInfo=ErrorInfo.."AI_main.lua wrong version "..string.gfind(MainVersion,verspattern)().."\n"
+		ErrorInfo=ErrorInfo.."AI_main.lua wrong version "..tostring(MainVersion).."\n"
 	end
 	--[[
 	if fsize("./AI_sakray/USER_AI/AzzyUtil.lua")~=AULen then

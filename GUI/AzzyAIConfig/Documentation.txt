@@ -114,7 +114,7 @@ Automatic use of skills:
 Turn on UseAttackSkill to automatically use offensive skills when attacking. To use only skills, and never normal attacks, also set UseSkillOnly to 1, to use attack skill even when chasing, set UseSkillOnly to -1. If the mercenary has an anti mob skill, it will be automatically used if the number of monsters in close proximity to the mercenary or owner is equal to or greater than AutoMobCount.
 
 To conserve SP, you may limit the number of times a mercenary will use skills on any single target - this is controlled by AutoSkillLimit. It defaults to 100 (effectively unlimited), set this to another number to limit the number of times skills will be used. Also to control SP use, you may want to not use auto skills unless there would be enough sp left to recast some sort of buff. Set AttackSkillReserveSP to this minimum SP value to do this.
-AutoSkillDelay is the delay (in ms) between uses of a skill. If you are having problems with the mercenary "double casting" skills, increase this value. Otherwise, leave it be. 
+AutoSkillDelay is extra delay (in ms) between uses of auto skills. If you are having problems with double-casting, increase this value; if set to 0 only cast timing, cooldown, and SP checks gate repeats. Negative values are treated as 0.
 When using lancer mercenaries with Pierce, you may want it to use pierce only on monsters of certain sizes. Set UsePierceSize to the minimum size you want to use pierce on (small is 1, medium 2, large is 3). Note that this will not work unless an updated MobID file is present and the sizes are set in the tactics file. 
 
 Buffs and duration skills:

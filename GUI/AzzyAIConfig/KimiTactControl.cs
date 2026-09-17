@@ -163,6 +163,8 @@ namespace AzzyAIConfig
                         return TACT_BASIC.TACT_ATTACK_LAST;
                     case 14:
                         return TACT_BASIC.TACT_ATTACK_TOP;
+                    case 15:
+                        return TACT_BASIC.TACT_TANK_GATHER;
                 }
                 return TACT_BASIC.TACT_IGNORE;
             }
@@ -229,6 +231,10 @@ namespace AzzyAIConfig
                     case TACT_BASIC.TACT_ATTACK_TOP:
                         {
                             comboBoxBasic.SelectedIndex = 14;
+                        } break;
+                    case TACT_BASIC.TACT_TANK_GATHER:
+                        {
+                            comboBoxBasic.SelectedIndex = 15;
                         } break;
                 }
             }

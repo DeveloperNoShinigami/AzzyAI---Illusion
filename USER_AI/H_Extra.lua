@@ -223,43 +223,10 @@ function OnAImiddle()
 	end
 end
 
--- OnAutoBuffs: Gate buff casting based on combo mode
--- When combo is active in current state, skip all buffs to prevent non-combo skill spam
--- IMPORTANT: Return 1 to SKIP buffs, return 0/nil to ALLOW buffs
+-- OnAutoBuffs runs after standard buffs. Return 1 when no action consumed the tick.
 function OnAutoBuffs(buffmode)
-	-- Skip autobuffs ONLY when a combo is actively running for the current state
-	-- Blueprint runtime takes precedence, then legacy combo flags
-	local function isAttackState()
-		return MyState == ATTACK_ST
-	end
-	local function isChaseState()
-		return MyState == CHASE_ST or MyState == TANKCHASE_ST
-	end
-	local function isIdleState()
-		return MyState == IDLE_ST or MyState == IDLEWALK_ST
-	end
-
-	if BlueprintComboEnabled == 1 and type(BlueprintRuntime) == "table" and BlueprintRuntime.active then
-		local trig = tostring(BlueprintRuntime.trigger or "")
-		if (trig == "OnAttack" and isAttackState()) or
-		   (trig == "OnChase" and isChaseState()) or
-		   (trig == "OnIdle" and isIdleState()) then
-			TraceAI("[BP_COMBO] Skipping autobuffs during active combo in this state")
-			return 1
-		end
-	end
-
-	if ComboEnabled == 1 then
-		if (ComboRunDuringAttack == 1 and isAttackState()) or
-		   (ComboRunDuringChase == 1 and isChaseState()) or
-		   (ComboRunDuringIdle == 1 and isIdleState()) then
-			TraceAI("[COMBO] Skipping autobuffs due to legacy combo gating in this state")
-			return 1
-		end
-	end
-
-	-- Allow standard autobuffs (Chaotic Heal, Body Double, Warm Def)
-	return 0
+	-- No custom buff was cast. Return 1 so AI state processing can continue.
+	return 1
 end
 
 -- OnFailUnknownMode: Called when skill cast fails with unknown mode

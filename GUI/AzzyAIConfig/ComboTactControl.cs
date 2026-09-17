@@ -36,6 +36,7 @@ namespace AzzyAIConfig
             Enemy,
             Owner,
             Self,
+            Ground,
             Ally,
             NearestEnemy,
             FarthestEnemy,
@@ -598,6 +599,22 @@ namespace AzzyAIConfig
                     foreach (var kvp in nodeData.Properties)
                         node.Properties[kvp.Key] = kvp.Value;
                 }
+
+                // Upgrade older skill nodes with catalog limits and target
+                // defaults while preserving an explicit user override.
+                if (node.Type == NodeType.Skill && node.Properties.ContainsKey("SkillID"))
+                {
+                    int skillId = Convert.ToInt32(node.Properties["SkillID"]);
+                    if (skillId != -1)
+                    {
+                        int oldLevel = node.Properties.ContainsKey("SkillLevel")
+                            ? Convert.ToInt32(node.Properties["SkillLevel"]) : 1;
+                        node.Properties["SkillLevel"] = KimiSkills.ClampLevel(skillId, oldLevel);
+                        node.Properties["SkillMaxLevel"] = KimiSkills.GetMaxLevel(skillId);
+                    }
+                    if (!node.Properties.ContainsKey("TargetMode"))
+                        node.Properties["TargetMode"] = KimiSkills.GetDefaultTarget(skillId);
+                }
                 
                 // MIGRATION FIX: Use current template pins instead of saved pins
                 // This ensures old saved files get updated pin definitions automatically
@@ -908,6 +925,7 @@ namespace AzzyAIConfig
                         if (node.Properties.ContainsKey("SkillID")) sb.Append($", skill = \"{node.Properties["SkillID"]}\"");
                         if (node.Properties.ContainsKey("SkillLevel")) sb.Append($", level = {node.Properties["SkillLevel"]}");
                         if (node.Properties.ContainsKey("RepeatCount")) sb.Append($", repeatCount = {node.Properties["RepeatCount"]}");
+                        if (node.Properties.ContainsKey("TargetMode")) sb.Append($", targetMode = \"{node.Properties["TargetMode"]}\"");
                         if (node.Properties.ContainsKey("SelectionMode")) sb.Append($", target = \"{node.Properties["SelectionMode"]}\"");
                     }
                     else if (node.Type == NodeType.Condition)
@@ -1186,13 +1204,13 @@ namespace AzzyAIConfig
 
         private string GenerateSkillCall(int skillId, int skillLevel, string targetVar = "target")
         {
-            // Use real RO AI API: SkillObject(actorId, skillLevel, skillId, targetId)
+            // Use the runtime dispatcher so self and ground skills use their catalog target mode.
             if (skillId == -1)
             {
                 return $"Attack(myid, {targetVar})";
             }
 
-            return $"SkillObject(myid, {skillLevel}, {skillId}, {targetVar})";
+            return $"DoSkill({skillId}, {skillLevel}, {targetVar})";
         }
 
         private string GenerateDelayCode(int delayMs)
@@ -1212,6 +1230,15 @@ namespace AzzyAIConfig
             // This ensures loaded combos always have up-to-date descriptions
             if (nodeType == NodeType.Skill)
             {
+                if (properties != null && properties.ContainsKey("SkillID"))
+                {
+                    int skillId = Convert.ToInt32(properties["SkillID"]);
+                    var skill = KimiSkills.GetDefinition(skillId);
+                    if (skill != null)
+                        return skill.Name + " (" + skill.Id + ") - " + skill.Type +
+                               ". Default target: " + skill.DefaultTarget +
+                               ". Valid levels: 1-" + skill.MaxLevel + ".";
+                }
                 // Use NodeLibrary skill descriptions
                 if (nodeTitle == "Illusion of Claws")
                     return "NEXT: Set RepeatCount 2-3 for auto-attack chains. Connect to Delay node for spam timing (200-300ms). Best for Agile/Raging Kimi.";
@@ -1334,13 +1361,14 @@ namespace AzzyAIConfig
             }
         }
 
-        // Skill Node Property Wrapper - Shows: SkillLevel (if not Auto-Attack), RepeatCount
+        // Skill Node Property Wrapper - Shows the catalog level limit and
+        // target default for each active Kimi skill.
         private class SkillNodePropertyWrapper : NodePropertyWrapper
         {
             public SkillNodePropertyWrapper(ComboNode n) : base(n) { }
 
             [System.ComponentModel.Category("Skill")]
-            [System.ComponentModel.Description("Skill level (1-10). Higher levels = more damage/effect. Use level 5+ for core skills.")]
+            [System.ComponentModel.Description("Skill level. The valid range is determined by this skill's KIMI_SKILLS maximum; level 0 is disabled through the Kimi settings enabled flag.")]
             [System.ComponentModel.Browsable(true)]
             public new int SkillLevel
             {
@@ -1348,13 +1376,44 @@ namespace AzzyAIConfig
                 {
                     // Hide for Auto-Attack (SkillID = -1)
                     int skillId = GetInt("SkillID", -1);
-                    return skillId != -1 ? GetInt("SkillLevel", 5) : 0;
+                    return skillId != -1 ? KimiSkills.ClampLevel(skillId,
+                        GetInt("SkillLevel", 1)) : 0;
                 }
                 set
                 {
                     int skillId = GetInt("SkillID", -1);
-                    if (skillId != -1) node.Properties["SkillLevel"] = value;
+                    if (skillId != -1) node.Properties["SkillLevel"] = KimiSkills.ClampLevel(skillId, value);
                 }
+            }
+
+            [System.ComponentModel.Category("Skill")]
+            [System.ComponentModel.Description("Maximum level from KIMI_SKILLS.txt. Read-only metadata for this skill node.")]
+            [System.ComponentModel.Browsable(true)]
+            [System.ComponentModel.ReadOnly(true)]
+            public int MaxLevel
+            {
+                get { return KimiSkills.GetMaxLevel(GetInt("SkillID", -1)); }
+            }
+
+            [System.ComponentModel.Category("Targeting")]
+            [System.ComponentModel.Description("Default target for this active skill: Enemy, Owner, Self, or Ground. Change only when the combo intentionally overrides the catalog default.")]
+            [System.ComponentModel.Browsable(true)]
+            public new TargetModeOption TargetMode
+            {
+                get
+                {
+                    string fallback = KimiSkills.GetDefaultTarget(GetInt("SkillID", -1));
+                    var raw = GetString("TargetMode", fallback);
+                    TargetModeOption val;
+                    return Enum.TryParse(raw, true, out val) ? val : ParseTargetMode(fallback);
+                }
+                set { node.Properties["TargetMode"] = value.ToString(); }
+            }
+
+            static TargetModeOption ParseTargetMode(string target)
+            {
+                TargetModeOption result;
+                return Enum.TryParse(target, true, out result) ? result : TargetModeOption.Enemy;
             }
 
             [System.ComponentModel.Category("Skill")]

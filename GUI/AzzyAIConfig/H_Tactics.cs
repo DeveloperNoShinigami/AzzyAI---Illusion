@@ -47,6 +47,10 @@ namespace AzzyAIConfig
                     {
                         t.TACT_BASIC = TACT_BASIC.TACT_TANK;
                     }
+                    else if (values[1] == "TACT_TANK_GATHER")
+                    {
+                        t.TACT_BASIC = TACT_BASIC.TACT_TANK_GATHER;
+                    }
                     else if (values[1] == "TACT_IGNORE")
                     {
                         t.TACT_BASIC = TACT_BASIC.TACT_IGNORE;
