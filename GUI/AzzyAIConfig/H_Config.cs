@@ -111,6 +111,7 @@ namespace AzzyAIConfig
             file = WriteConfigValue(file, "UseDanceAttack", UseDanceAttack);
             file = WriteConfigValue(file, "UseAvoid", UseAvoid);
             file = WriteConfigValue(file, "TankMonsterLimit", TankMonsterLimit);
+            file = WriteConfigValue(file, "TankPullDistance", TankPullDistance);
             file = WriteConfigValue(file, "RescueOwnerLowHP", RescueOwnerLowHP);
             file = WriteConfigValue(file, "StationaryAggroDist", StationaryAggroDist);
             file = WriteConfigValue(file, "MobileAggroDist", MobileAggroDist);
@@ -307,6 +308,9 @@ namespace AzzyAIConfig
                 UseAvoid = Convert.ToInt32(Regex.Match(file, "UseAvoid\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             if (Regex.IsMatch(file, "TankMonsterLimit\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 TankMonsterLimit = Convert.ToInt32(Regex.Match(file, "TankMonsterLimit\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
+            TankPullDistance = 30;
+            if (Regex.IsMatch(file, "TankPullDistance\\s*=\\s*-?\\d+", RegexOptions.Multiline))
+                TankPullDistance = Convert.ToInt32(Regex.Match(file, "TankPullDistance\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             if (Regex.IsMatch(file, "RescueOwnerLowHP\\s*=\\s*-?\\d+", RegexOptions.Multiline))
                 RescueOwnerLowHP = Convert.ToInt32(Regex.Match(file, "RescueOwnerLowHP\\s*=\\s*-?\\d+", RegexOptions.Multiline).Value.Split('=')[1].Trim());
             if (Regex.IsMatch(file, "StationaryAggroDist\\s*=\\s*-?\\d+", RegexOptions.Multiline))
@@ -453,6 +457,15 @@ namespace AzzyAIConfig
             BodyDoubleCooldown = 0;
             var BodyDoubleCooldownMatch = Regex.Match(file, @"BodyDoubleCooldown\s*=\s*(-?\d+)");
             if (BodyDoubleCooldownMatch.Success) BodyDoubleCooldown = Convert.ToInt32(BodyDoubleCooldownMatch.Groups[1].Value);
+            QuickDefenseHP = 0;
+            var QuickDefenseHPMatch = Regex.Match(file, @"QuickDefenseHP\s*=\s*(-?\d+)");
+            if (QuickDefenseHPMatch.Success) QuickDefenseHP = Convert.ToInt32(QuickDefenseHPMatch.Groups[1].Value);
+            WardDomainHPThreshold = 0;
+            var WardDomainHPThresholdMatch = Regex.Match(file, @"WardDomainHPThreshold\s*=\s*(-?\d+)");
+            if (WardDomainHPThresholdMatch.Success) WardDomainHPThreshold = Convert.ToInt32(WardDomainHPThresholdMatch.Groups[1].Value);
+            WardDomainSPStopThreshold = 20;
+            var WardDomainSPStopThresholdMatch = Regex.Match(file, @"WardDomainSPStopThreshold\s*=\s*(-?\d+)");
+            if (WardDomainSPStopThresholdMatch.Success) WardDomainSPStopThreshold = Convert.ToInt32(WardDomainSPStopThresholdMatch.Groups[1].Value);
             BastionRenewalCooldown = 0;
             var BastionRenewalCooldownMatch = Regex.Match(file, @"BastionRenewalCooldown\s*=\s*(-?\d+)");
             if (BastionRenewalCooldownMatch.Success) BastionRenewalCooldown = Convert.ToInt32(BastionRenewalCooldownMatch.Groups[1].Value);
@@ -786,6 +799,9 @@ namespace AzzyAIConfig
             file = WriteConfigValue(file, "UseBodyDouble", UseBodyDouble);
             file = WriteConfigValue(file, "UseAutoBD", UseBodyDouble);
             file = WriteConfigValue(file, "BodyDoubleCooldown", BodyDoubleCooldown);
+            file = WriteConfigValue(file, "QuickDefenseHP", QuickDefenseHP);
+            file = WriteConfigValue(file, "WardDomainHPThreshold", WardDomainHPThreshold);
+            file = WriteConfigValue(file, "WardDomainSPStopThreshold", WardDomainSPStopThreshold);
             file = WriteConfigValue(file, "BastionRenewalCooldown", BastionRenewalCooldown);
             file = WriteConfigValue(file, "BodyDoubleOwnerHP", BodyDoubleOwnerHP);
             
@@ -1140,6 +1156,12 @@ namespace AzzyAIConfig
         {
             get { return _TankMonsterLimit; }
             set { _TankMonsterLimit = value; }
+        }
+        static int _TankPullDistance = 30;
+        public static int TankPullDistance
+        {
+            get { return _TankPullDistance; }
+            set { _TankPullDistance = value; }
         }
         static int _RescueOwnerLowHP = 0;
         public static int RescueOwnerLowHP
@@ -1703,6 +1725,9 @@ namespace AzzyAIConfig
 
         // Body Double options
         public static int BodyDoubleCooldown { get; set; }
+        public static int QuickDefenseHP { get; set; }
+        public static int WardDomainHPThreshold { get; set; }
+        public static int WardDomainSPStopThreshold { get; set; } = 20;
         public static int BastionRenewalCooldown { get; set; }
         static int _UseBodyDouble = 1;
         public static int UseBodyDouble
@@ -1947,6 +1972,7 @@ namespace AzzyAIConfig
             UseDanceAttack = 0;
             UseAvoid = 0;
             TankMonsterLimit = 30;
+            TankPullDistance = 30;
             RescueOwnerLowHP = 0;
             StationaryAggroDist = 0;
             MobileAggroDist = 0;
@@ -2007,6 +2033,9 @@ namespace AzzyAIConfig
             ChaoticHealKimiHP = 0;
             UseBodyDouble = 0;
             BodyDoubleCooldown = 0;
+            QuickDefenseHP = 0;
+            WardDomainHPThreshold = 0;
+            WardDomainSPStopThreshold = 20;
             BastionRenewalCooldown = 0;
             BodyDoubleOwnerHP = 0;
             UseWarmDef = 0;

@@ -1,4 +1,4 @@
-﻿// ExtraControl.cs
+// ExtraControl.cs
 //
 // Programmed by Machiavellian of iRO Chaos
 // Modified for Kimi-Only (2026)
@@ -40,19 +40,35 @@ namespace AzzyAIConfig
             }
 
             InitializeComponent();
+            textBox1.Text = _hextra;
         }
 
         public void Save()
         {
-            // Kimi-only: Do NOT overwrite H_Extra.lua from GUI to avoid clobbering user customizations
-            // No-op: users should manage H_Extra.lua manually
-            return;
+            Save(DefaultExtraPath);
         }
 
         public void Save(string hfile)
         {
-            // Deprecated: prevent GUI from modifying H_Extra.lua
-            return;
+            _hextra = textBox1.Text;
+            File.WriteAllText(hfile, _hextra);
+        }
+
+        public void ReloadSettings()
+        {
+            _hextra = File.Exists(DefaultExtraPath) ? File.ReadAllText(DefaultExtraPath) : "";
+            textBox1.Text = _hextra;
+        }
+
+        internal string GetSettingsText()
+        {
+            return textBox1.Text;
+        }
+
+        internal void SetSettingsText(string contents)
+        {
+            _hextra = contents ?? String.Empty;
+            textBox1.Text = _hextra;
         }
 
         private void ExtraControl_Load(object sender, EventArgs e)

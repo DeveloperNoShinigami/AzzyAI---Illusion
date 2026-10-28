@@ -36,6 +36,7 @@ namespace AzzyAIConfig
             // Refresh the shipped runtime before saving GUI settings so a
             // deployed GUI can repair/update USER_AI without manual Lua work.
             RuntimeFiles.Install();
+            ApplyPendingSupportFiles();
 
             // Save the Kimi configurations
             _comboProfiles.ApplySelected();
@@ -48,11 +49,13 @@ namespace AzzyAIConfig
             
             // Also generate H_SkillList.lua (Kimi-only) next to the EXE
             SkillList.Save(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "H_SkillList.lua"));
+            ClearPendingSupportFiles();
         }
         
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            InitializeSettingsMenus();
             // Force create a fresh KimiConf instance that loads from file
             _kconf = new KimiConf();
             InitializeKimiTabs();
@@ -196,39 +199,12 @@ namespace AzzyAIConfig
 
         private void kimiSettingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            // Create a new open file dialog box
-            OpenFileDialog ofd = new OpenFileDialog();
+            ImportSelectedSettingsFiles();
+        }
 
-            // Turn on validate names
-            ofd.ValidateNames = true;
-
-            // Add a filter for lua files
-            ofd.Filter = "(*.lua)|*.lua";
-
-            // Set the open file dialog box title to "Import Kimi settings."
-            ofd.Title = "Import Kimi settings.";
-
-            // Show the dialog and check if the result is OK
-            if (ofd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-                try
-                {
-                    // Open the file
-                    _kconf.Open(ofd.FileName);
-                    _comboProfiles.Load(ofd.FileName);
-                    RefreshKimiGrids();
-
-                    // Refresh the property grid and mark the imported values
-                    // as pending until the user clicks Apply.
-                    propertyGridKimi.Refresh();
-                    ConfigChanged(this, EventArgs.Empty);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Could not import Kimi settings:\n\n" + ex.Message,
-                                    "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+        private void importAllSettingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ImportAllSettingsBundle();
         }
 
         private void kimiTacticsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -241,6 +217,7 @@ namespace AzzyAIConfig
 
             // Add a filter for lua files
             ofd.Filter = "(*.lua)|*.lua";
+            ofd.Multiselect = true;
 
             // Set the open file dialog box title to "Import Kimi tactics."
             ofd.Title = "Import Kimi tactics.";
@@ -248,41 +225,28 @@ namespace AzzyAIConfig
             // Show the dialog and check if the result is OK
             if (ofd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                // Open the file
-                kimiTactControl1.Open(ofd.FileName);
+                try
+                {
+                    ConfigChanged(this, EventArgs.Empty);
+                    foreach (string file in ofd.FileNames) kimiTactControl1.Open(file);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not import tactics:\n\n" + ex.Message +
+                        "\n\nReview any imported rows before applying settings.",
+                        "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
         private void kimiSettingsToolStripMenuItem1_Click(object sender, EventArgs e)
         {
-            // Create a new save file dialog box
-            SaveFileDialog sfd = new SaveFileDialog();
+            ExportSelectedTabs();
+        }
 
-            // Turn on validate names
-            sfd.ValidateNames = true;
-
-            // Set the open file dialog box title to "Export Kimi settings."
-            sfd.Title = "Export Kimi settings.";
-
-            // Add a filter for lua files
-            sfd.Filter = "(*.lua)|*.lua";
-
-            // Show the dialog and check if the result is OK
-            if (sfd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-                try
-                {
-                    // Save the file
-                    _comboProfiles.ApplySelected();
-                    _kconf.Save(sfd.FileName);
-                    _comboProfiles.Save(sfd.FileName);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Could not export Kimi settings:\n\n" + ex.Message,
-                                    "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+        private void exportAllSettingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ExportAllSettings();
         }
 
         private void kimiTacticsToolStripMenuItem1_Click(object sender, EventArgs e)

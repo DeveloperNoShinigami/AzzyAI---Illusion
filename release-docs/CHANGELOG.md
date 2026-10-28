@@ -1,8 +1,25 @@
 # Changelog
 
+## Settings compatibility and Grand Summoning defaults
+
+- Restored full settings import/export and compatibility with legacy settings ZIPs and H_Config.lua.
+- Added a tab selection submenu for exporting one or several checked tabs together while retaining single-tab packages.
+- Restored five editable Grand Summoning tactics with Morroc names and verified monster IDs; custom values are preserved.
+
+## Tab-specific settings transfer
+
+- Export the selected top-level tab instead of replacing every Kimi profile with a full settings bundle. Import several tab packages together and route each to its matching tab.
+- Merge imported tactics by ID, including the Default row, to prevent duplicates on repeated imports.
+- Exclude Defaults.lua and runtime files from tab packages.
+
 Documentation synchronized on 14 September 2026. Recent entries describe the current GUI and runtime fixes. Checks cover builds, selected settings round-trips, tab initialization, and AoE boundaries; in-game verification remains necessary.
 
 Still outstanding: missing-route handling and unsupported legacy tactic specializations. Owner rescue and ranged positioning have new code fixes described below; in-game behavior is not yet verified.
+
+## Tank – Gather Taunt collection fix
+
+- Removed the AutoMobCount requirement from gathering Taunt. It prevented collecting smaller groups, particularly when Skill Only blocked basic-hit tagging.
+- AutoMobCount still controls when the attack combo starts, with the smaller-group fallback when no nearby eligible targets remain. Taunt retains its enabled, range, SP, tactic, and cooldown checks.
 
 ## Bastion configured recast interval
 

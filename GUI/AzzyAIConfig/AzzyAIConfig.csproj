@@ -72,6 +72,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -135,6 +136,9 @@
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="MainForm.TabSettings.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
@@ -146,6 +150,8 @@
     <Compile Include="H_Config.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="RuntimeFiles.cs" />
+    <Compile Include="SettingsBundle.cs" />
+    <Compile Include="TabSettingsBundle.cs" />
     <Compile Include="NavigationMap.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="AzzyAIAboutBox.resx">

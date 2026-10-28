@@ -30,7 +30,8 @@ namespace AzzyAIConfig
         {
             // Keep legacy healing fields in saved files, but expose only Chaotic Heal controls.
             if (p.Name == "UseWarmDef" || p.Name == "WarmDefCooldown" || p.Name == "UseBodyDouble" || p.Name == "UseMasterSwap") return false;
-            if (p.Name == "BastionRenewalCooldown") return type == 1;
+            if (p.Name == "BastionRenewalCooldown") return type == 1;
+            if (p.Name == "WardDomainHPThreshold" || p.Name == "WardDomainSPStopThreshold") return type == 1;
             if (p.Name == "HealOwnerHP" || p.Name == "HealSelfHP") return false;
             if (p.Name == "UseAutoHeal") return type == 1 || type == 2;
             if (p.Name == "UseChaoticHeal") return false;

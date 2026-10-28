@@ -1,4 +1,4 @@
-﻿namespace AzzyAIConfig
+namespace AzzyAIConfig
 {
     partial class MainForm
     {
@@ -133,7 +133,7 @@
             // 
             homunculusSettingsToolStripMenuItem.Name = "kimiSettingsToolStripMenuItem";
             homunculusSettingsToolStripMenuItem.Size = new System.Drawing.Size(197, 22);
-            homunculusSettingsToolStripMenuItem.Text = "Kimi Settings...";
+            homunculusSettingsToolStripMenuItem.Text = "Settings Files...";
             homunculusSettingsToolStripMenuItem.Click += new System.EventHandler(this.kimiSettingsToolStripMenuItem_Click);
             // 
             // homunculusTacticsToolStripMenuItem
@@ -156,7 +156,7 @@
             // 
             homunculusSettingsToolStripMenuItem1.Name = "kimiSettingsToolStripMenuItem1";
             homunculusSettingsToolStripMenuItem1.Size = new System.Drawing.Size(197, 22);
-            homunculusSettingsToolStripMenuItem1.Text = "Kimi Settings...";
+            homunculusSettingsToolStripMenuItem1.Text = "Selected Tab...";
             homunculusSettingsToolStripMenuItem1.Click += new System.EventHandler(this.kimiSettingsToolStripMenuItem1_Click);
             // 
             // homunculusTacticsToolStripMenuItem1

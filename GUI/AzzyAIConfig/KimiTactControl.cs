@@ -87,6 +87,32 @@ namespace AzzyAIConfig
             // Load the Kimi tactics from the file
             H_Tactics.Load(file);
 
+            RefreshTacticsList();
+        }
+
+        internal void OpenText(string contents)
+        {
+            H_Tactics.LoadText(contents ?? String.Empty);
+            RefreshTacticsList();
+        }
+
+        internal string ExportText()
+        {
+            string temporaryPath = Path.GetTempFileName();
+            try
+            {
+                H_Tactics.Save(temporaryPath);
+                return File.ReadAllText(temporaryPath);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
+        }
+
+        void RefreshTacticsList()
+        {
+
             // Create a new array of tactics objects
             Tact[] items = new Tact[H_Tactics.Tactics.Count];
 
@@ -100,7 +126,7 @@ namespace AzzyAIConfig
             listBoxTactics.Items.AddRange(items);
 
             // Select the first item in the listBoxTactics items list
-            listBoxTactics.SelectedIndex = 0;
+            if (listBoxTactics.Items.Count > 0) listBoxTactics.SelectedIndex = 0;
         }
         #region Private Properties
         private int TACT_ID

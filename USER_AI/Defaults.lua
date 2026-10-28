@@ -207,3 +207,10 @@ WarmDefHP = 100 -- automatic Bastion Renewal self-HP threshold
 
 -- Select a map in KimiAIConfig before using static terrain navigation.
 NavigationMap = ""
+
+QuickDefenseHP = 0 -- Kimi HP percentage; 0 disables automatic Quick Defense.
+
+TankPullDistance = 30 -- Owner-centered search radius for Tank - Pull and Tank - Gather.
+
+WardDomainHPThreshold = 0 -- Owner or visible friend HP below this percent activates Domain; 0 disables automatic use.
+WardDomainSPStopThreshold = 20 -- Ward Kimi SP at or below this percent cancels active Domain.

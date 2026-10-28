@@ -966,7 +966,7 @@ function doInit(myid)
 	-- without profiles continue using their existing global combo settings.
 	local comboProfile = type(KimiComboProfiles) == "table" and KimiComboProfiles[KIMITYPE]
 	if type(comboProfile) == "table" then
-		local comboKeys = {"ComboEnabled", "ComboRunDuringChase", "ComboRunDuringAttack", "ComboRunDuringIdle", "ComboResetOnTargetChange", "ComboAutoAttackDelay", "UseAttackSkill", "AttackSkillReserveSP", "AutoSkillDelay", "AutoMobMode", "AutoMobCount", "UseSkillOnly", "AoEMaximizeTargets", "AoEReserveSP", "AoEFixedLevel", "HealOwnerHP", "HealSelfHP", "UseAutoHeal", "UseChaoticHeal", "ChaoticHealOwnerHP", "ChaoticHealKimiHP", "UseBodyDouble", "UseAutoBD", "BodyDoubleCooldown", "BastionRenewalCooldown", "BodyDoubleOwnerHP", "UseWarmDef", "WarmDefCooldown", "WarmDefHP", "UseMasterSwap", "MasterSwapOwnerHP", "MasterSwapCooldown"}
+		local comboKeys = {"ComboEnabled", "ComboRunDuringChase", "ComboRunDuringAttack", "ComboRunDuringIdle", "ComboResetOnTargetChange", "ComboAutoAttackDelay", "UseAttackSkill", "AttackSkillReserveSP", "AutoSkillDelay", "AutoMobMode", "AutoMobCount", "UseSkillOnly", "AoEMaximizeTargets", "AoEReserveSP", "AoEFixedLevel", "HealOwnerHP", "HealSelfHP", "UseAutoHeal", "UseChaoticHeal", "ChaoticHealOwnerHP", "ChaoticHealKimiHP", "UseBodyDouble", "UseAutoBD", "QuickDefenseHP", "WardDomainHPThreshold", "WardDomainSPStopThreshold", "BodyDoubleCooldown", "BastionRenewalCooldown", "BodyDoubleOwnerHP", "UseWarmDef", "WarmDefCooldown", "WarmDefHP", "UseMasterSwap", "MasterSwapOwnerHP", "MasterSwapCooldown"}
 		for _, key in ipairs(comboKeys) do
 			if type(comboProfile[key]) == "number" then _G[key] = comboProfile[key] end
 		end
@@ -1131,6 +1131,12 @@ function PositionComboSkill(myid,target,skill,level)
 	local x,y = GetV(V_POSITION,myid)
 	local tx,ty = GetV(V_POSITION,target)
 	local attempt = ComboRetreatAttempt
+	if distance <= range and attempt and attempt.target == target
+		and (attempt.x ~= x or attempt.y ~= y) then
+		-- One completed retreat step is enough; cast now instead of walking to the range limit.
+		ComboRetreatAttempt = nil
+		return false
+	end
 	if distance <= range and attempt and attempt.target == target and attempt.x == x and attempt.y == y and attempt.tx == tx and attempt.ty == ty then
 		-- Allow a movement command time to take effect, without reissuing it.
 		-- If neither actor moved, stop retreating and let an in-range cast proceed.
@@ -1824,7 +1830,7 @@ function	OnIDLE_ST ()
 			end
 		end
 		if (aggro==1 and TankMonsterCount < TankMonsterLimit) then
-			object = SelectEnemy(GetEnemyList(MyID,-1))
+			object = SelectEnemy(GetEnemyList(MyID,-1),nil,true)
 			if (object ~= 0) then
 				MyState = TANKCHASE_ST
 				MyEnemy = object
@@ -2666,7 +2672,7 @@ function OnTANKGATHER_ST()
 			and GetV(V_MOTION,id) ~= MOTION_DEAD and not IsOutOfSight(MyID,id)
 			and GetDistanceRect(owner,id) <= GetMoveBounds() and IsNotKS(MyID,id) == 1 then
 			if GetV(V_TARGET,id) == MyID then held[id]={}; count=count+1
-			elseif GetDistanceA(owner,id) <= GetAggroDist() then pending[id]={} end
+			elseif GetDistanceRect(owner,id) <= GetTankPullDistance() then pending[id]={} end
 		end
 	end
 	local function nearest(list)
@@ -2678,9 +2684,9 @@ function OnTANKGATHER_ST()
 		return best
 	end
 	local nextTarget = nearest(pending)
-	if count == 0 then GatherFighting=false end
 	local goal = math.min(math.max(1,tonumber(AutoMobCount) or 1),math.max(1,tonumber(TankMonsterLimit) or 30))
-	if count >= goal or (count > 0 and nextTarget == 0) then GatherFighting=true end
+	-- Recheck collection every tick, including newly visible or newly eligible mobs.
+	GatherFighting = count >= goal or (count > 0 and nextTarget == 0)
 	local target = GatherFighting and nearest(held) or nextTarget
 	if target == 0 and count > 0 then target = nearest(held) end
 	if target == 0 then
@@ -2701,14 +2707,8 @@ function OnTANKGATHER_ST()
 			if GetDistanceRect(MyID,target)>range or not GatherSight(target) then
 				GatherMove(target,range); return
 			end
-			local nearby=0
-			for id,_ in pairs(held) do
-				if GetDistanceRect(MyID,id)<=range and GatherSight(id) then nearby=nearby+1 end
-			end
-			for id,_ in pairs(pending) do
-				if GetDistanceRect(MyID,id)<=range and GatherSight(id) then nearby=nearby+1 end
-			end
-			if nearby >= goal and DoSkill(S_TAUNT,allowed,MyID) ~= 0 then
+			-- Taunt builds the group; AutoMobCount gates combat, not collection.
+			if DoSkill(S_TAUNT,allowed,MyID) ~= 0 then
 				RecordComboTacticCast(target,S_TAUNT); return
 			end
 		end
@@ -3190,7 +3190,7 @@ function	OnMOVE_CMD_HOLD_ST ()
 			end
 			return
 		end
-		object = SelectEnemy(GetEnemyList(MyID,-1))
+		object = SelectEnemy(GetEnemyList(MyID,-1),nil,true)
 		if (object ~= 0) then
 			MyState = TANKCHASE_ST
 			MyEnemy = object
@@ -3479,7 +3479,7 @@ function GetFriendTargets() -- returns list of targets of friends who are attack
 			if (IsMonster(target)==1) then
 				tact=GetTact(TACT_BASIC,target)
 				if (FriendAttack[motion]==1 and tact > 0 and tact ~=9) then
-					targets[target]={MotionClassLU[GetV(V_MOTION,target)],GetTargetClass(target),GetTact(TACT_BASIC,target),GetTact(TACT_CAST,target)}
+					targets[target]={MotionClassLU[GetV(V_MOTION,target)],GetTargetClass(GetV(V_TARGET,target)),GetTact(TACT_BASIC,target),GetTact(TACT_CAST,target)}
 					
 				end
 			end
@@ -3519,7 +3519,8 @@ function	GetEnemyList (myid,aggro)
 		local ownerRescue = aggro == -2 and tact > 0 and GetV(V_TARGET,k) == owner and IsRescueTarget(k) == 1
 		if (0 < tact and (tact < 5 or tact >9) and aggro==1 and (DoNotAttackMoving ~=1 or v[1]~=1) and (tact ~= 14 or AttackLastFullSP==0 or SPPercent(MyID)==100)) or  (tact > 9 and tact < 13 and aggro == 2 and k~=MyEnemy) or ownerRescue or (v[2]>0 and tact>0 and (tact~=9 or v[2]==1) and (v[1]==3 or (v[1]==5 and casttact >= CAST_REACT)) and aggro~=2 and (aggro > -1 or (aggro==-2 and IsRescueTarget(k)==1))) or (tact == -1 and aggro==-1 and v[2]~=1) then
 			--TraceAI("Tactics say to attack:"..k)
-			if (IsNotKS(myid,k)==1 and v[1] > -1) then
+			if (IsNotKS(myid,k)==1 and v[1] > -1)
+				and (aggro ~= -1 or GetDistanceRect(owner,k) <= GetTankPullDistance()) then
 				--TraceAI("Is alive and not a KS")
 				if aggro == 0 or (aggro~=2 and v[2]>0) then 
 					if (GetMoveBounds() >= GetDistanceRect(owner,k)) then
@@ -3532,7 +3533,7 @@ function	GetEnemyList (myid,aggro)
 					--	TraceAI("target ignored "..k.." mypos "..tempx..","..tempy.." enemy "..targx..","..targy.." bounds "..GetMoveBounds().."dist "..GetDistanceRect(owner,k))
 					end
 				elseif aggro~=2 then
-					if (GetAggroDist() >= GetDistanceA(owner,k)) then
+					if (aggro == -1 or GetAggroDist() >= GetDistanceA(owner,k)) then
 						TraceAI("Adding to target list: "..k)
 						r={v[1],v[2],tact,casttact}
 						enemys[k] = r
@@ -3767,6 +3768,56 @@ function DoAutoBuffs(buffmode)
 	return OnAutoBuffs(buffmode)
 end
 
+-- The client does not expose aura status. Track our successful cast request for its 30-second duration.
+WardDomainActiveUntil = WardDomainActiveUntil or 0
+local function WardDomainAllyNeedsProtection(myid,hpThreshold)
+	local function BelowThreshold(id)
+		if not id or id == 0 then return false end
+		local hp,maxhp = GetV(V_HP,id),GetV(V_MAXHP,id)
+		return hp and maxhp and hp > 0 and maxhp > 0 and hp * 100 < maxhp * hpThreshold
+	end
+	local owner = GetV(V_OWNER,myid)
+	if BelowThreshold(owner) then return true end
+	for _,actor in ipairs(GetActors()) do
+		if actor ~= myid and actor ~= owner and IsFriend(actor) == 1 and BelowThreshold(actor) then return true end
+	end
+	return false
+end
+function DoAutoWardDomain(myid)
+	if GetKimiType(myid) ~= WARD then return end
+	local hpThreshold = tonumber(WardDomainHPThreshold) or 0
+	if hpThreshold <= 0 then return end
+	local now = GetTick()
+	local spStop = math.max(0, tonumber(WardDomainSPStopThreshold) or 20)
+	if WardDomainActiveUntil > now then
+		if SPPercent(myid) > spStop or now < (AutoSkillCastTimeout or 0) then return end
+		-- Recasting an active aura cancels it. Bypass the activation reuse gate for this request only.
+		local level = GetKimiSkillLevel(S_WARD_DOMAIN,nil,myid)
+		if level < 1 then level = 1 end
+		if OldSkillObject(myid,level,S_WARD_DOMAIN,myid) == 0 then return end
+		WardDomainActiveUntil = 0
+		AutoSkillTimeout = math.max(AutoSkillTimeout or 0,now + 250)
+		return 1
+	end
+	if not WardDomainAllyNeedsProtection(myid,hpThreshold) or SPPercent(myid) <= spStop then return end
+	if now < (AutoSkillTimeout or 0) or now < (AutoSkillCastTimeout or 0) then return end
+	local canCast,level = KimiSkillCanCast(S_WARD_DOMAIN,nil,myid)
+	if not canCast then return end
+	if DoSkill(S_WARD_DOMAIN,level,myid) == 0 then return end
+	return 1
+end
+
+-- Quick Defense protects Kimi, so its threshold uses Kimi's own HP.
+function DoAutoQuickDefense(myid)
+	local threshold = tonumber(QuickDefenseHP) or 0
+	if threshold <= 0 or HPPercent(myid) >= threshold then return end
+	if GetTick() < (AutoSkillTimeout or 0) or GetTick() < (AutoSkillCastTimeout or 0) then return end
+	local canCast,level = KimiSkillCanCast(S_QUICK_DEFENSE,nil,myid)
+	if not canCast then return end
+	if DoSkill(S_QUICK_DEFENSE,level,myid) == 0 then return end
+	return 1
+end
+
 -- Master Swap availability comes from its skill Enabled setting.
 function DoAutoMasterSwap(myid)
 	local threshold = tonumber(MasterSwapOwnerHP) or 0
@@ -3955,7 +4006,7 @@ function	OnIDLEWALK_ST ()
 			end
 		end
 		if (aggro==1 and TankMonsterCount < TankMonsterLimit) then
-			object = SelectEnemy(GetEnemyList(MyID,-1))
+			object = SelectEnemy(GetEnemyList(MyID,-1),nil,true)
 			if (object ~= 0) then
 				MyState = TANKCHASE_ST
 				MyEnemy = object
@@ -4775,6 +4826,16 @@ function AI(myid)
         if MyState==SKILL_OBJECT_CMD_ST then OnSKILL_OBJECT_CMD_ST() else OnSKILL_AREA_CMD_ST() end
         return
     end
+
+	if DoAutoWardDomain(MyID) == 1 then
+		if LagReduction and LagReduction ~= 0 then modtwroSend() end
+		return
+	end
+
+	if DoAutoQuickDefense(MyID) == 1 then
+		if LagReduction and LagReduction ~= 0 then modtwroSend() end
+		return
+	end
 
 	if DoAutoBodyDouble(MyID) == 1 then
 		if LagReduction and LagReduction ~= 0 then modtwroSend() end

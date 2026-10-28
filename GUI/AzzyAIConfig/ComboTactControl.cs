@@ -460,6 +460,25 @@ namespace AzzyAIConfig
 
         private void SaveToFile(string path)
         {
+            string jsonString = SerializeSettingsText();
+            File.WriteAllText(path, jsonString);
+
+            lastBlueprintPath = path;
+            EnsureDefaultBlueprintCopy(path, jsonString);
+        }
+
+        internal string ExportSettingsText()
+        {
+            return SerializeSettingsText();
+        }
+
+        internal void ImportSettingsText(string jsonText)
+        {
+            LoadFromText(jsonText);
+        }
+
+        private string SerializeSettingsText()
+        {
             var nodes = blueprintCanvas.GetNodes();
             
             // Convert to serializable DTO with hex colors instead of Color objects
@@ -540,17 +559,22 @@ namespace AzzyAIConfig
             
             // Format JSON for readability
             jsonString = FormatJson(jsonString);
-            File.WriteAllText(path, jsonString);
-
-            lastBlueprintPath = path;
-            EnsureDefaultBlueprintCopy(path, jsonString);
+            return jsonString;
         }
 
         private void LoadFromFile(string path)
         {
+            LoadFromText(File.ReadAllText(path));
+            lastBlueprintPath = path;
+            EnsureDefaultBlueprintCopy(path);
+        }
+
+        private void LoadFromText(string jsonText)
+        {
             var json = new System.Web.Script.Serialization.JavaScriptSerializer();
-            var jsonText = File.ReadAllText(path);
             var data = json.Deserialize<SerializableBlueprintData>(jsonText);
+            if (data == null || data.Nodes == null)
+                throw new InvalidDataException("The blueprint settings are empty or invalid.");
             
             blueprintCanvas.ClearAll();
             
@@ -739,8 +763,6 @@ namespace AzzyAIConfig
             
             NotifyComboChanged();
 
-            lastBlueprintPath = path;
-            EnsureDefaultBlueprintCopy(path);
         }
 
         private void EnsureDefaultBlueprintCopy(string sourcePath, string content = null)

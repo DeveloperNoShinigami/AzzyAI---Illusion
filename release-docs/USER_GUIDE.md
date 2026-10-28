@@ -19,7 +19,7 @@ This guide uses the labels and property names from the current executable. Some 
 | Each Kimi: Combo | Independent standard combo settings and eight slots. Skill choices are filtered for that Kimi. |
 | Blueprint (Shared) | Shared graph editor; Kimi Type conditions can select a sequence for each type. |
 
-Opening a tab changes only the view. Existing standard combos migrate to the configured Kimi; older global automatic settings are initially inherited by all four profiles. Kimi Settings import/export includes these profiles. Blueprint graphs and monster tactics retain separate save/load controls.
+Opening a tab changes only the view. Existing standard combos migrate to the configured Kimi; older global automatic settings are initially inherited by all four profiles. Export > Tabs exports one or several checked tabs. Export > All Settings remains available for a complete settings backup. A named Kimi package includes its skills, automatic options, and standard combo. Shared skill values still apply across the Kimi types that use them.
 
 ### Occult automatic healing
 
@@ -535,12 +535,15 @@ The main window has nine tabs: **Kimi Settings**, **Ward**, **Occult**, **Agile*
 
 | Menu or control | Shortcut | Action |
 | --- | --- | --- |
-| File > Import > Kimi Settings... | — | Loads a saved Lua settings file into the Kimi Settings grid. Review the values, then click Apply to activate them in this client. |
-| File > Import > Kimi Tactics... | — | Opens a Lua file and loads its Kimi tactic rows. |
-| File > Export > Kimi Settings... | — | Saves the current Kimi settings to a named Lua file for later import. This does not activate the exported file. Tactics and Blueprint files are saved separately using their own controls. |
+| File > Import > Settings Files... | — | Select one or several tab packages. Each package identifies its destination tab. Review imported values, then click Apply Settings. |
+| File > Import > Kimi Tactics... | — | Merges Lua tactic rows by monster ID. Existing IDs, including Default, are updated instead of duplicated. |
+| File > Export > Tabs | — | Check one or several tabs. The checklist remains open while choosing tabs. |
+| File > Export > Export Selected Tabs... | — | Exports the checked tabs together, including unsaved edits, without applying them. |
+| File > Export > All Settings... | — | Saves current settings and exports a complete settings backup. |
+| File > Import > All Settings... | — | Loads an older or current full settings backup. Review imported settings before Apply. |
 | File > Export > Kimi Tactics... | — | Writes the current Kimi tactic collection to a selected Lua file. |
 | File > Exit | — | Closes the window. If changes are marked dirty, it asks whether to save. |
-| Edit > Apply Settings | Ctrl+S | Runs the full save path for settings, Kimi tactics, combo settings, PVP tactics, and skill list. Extra Options is included in the call but its Save method is a no-op. |
+| Edit > Apply Settings | Ctrl+S | Runs the full save path for settings, Kimi tactics, combo settings, PVP tactics, and skill list. Extra Options is saved as well. |
 | Edit > Revert | Ctrl+R | Reloads shared settings and per-Kimi automatic and standard combo profiles from H_Config.lua. It does not reload tactics or the Blueprint graph. |
 | Edit > Reset to Defaults | Ctrl+D | Resets shared settings and per-Kimi profiles in the editor. Apply is still required to save. |
 | Help > Documentation | F1 | Opens Documentation.html when present, otherwise Documentation.pdf. If neither file exists, it shows an error. |
@@ -550,11 +553,11 @@ The main window has nine tabs: **Kimi Settings**, **Ward**, **Occult**, **Agile*
 
 The top-level menus use Alt+F for File, Alt+E for Edit, and Alt+H for Help.
 
-Kimi Tactics and Kimi Settings are the only import/export targets exposed by File. There are no PVP, Combo, or Extra import/export menu items.
+Tab packages support Kimi Settings, each named Kimi, Kimi Tactics, Blueprint (Shared), PVP Tactics, and Extra Options. Tab packages do not replace Defaults.lua or the AI runtime. Older full-settings ZIPs and standalone H_Config.lua files remain supported. Full imports restore the saved configuration; tab packages change only the tabs included in that package. Named H_Tactics.lua, H_PVP_Tact.lua, H_Extra.lua, and combo_tactics.cbp files can also be imported together. Common skill levels and enable switches remain shared across the applicable Kimi tabs.
 
 The save prompt has Yes, No, and Cancel buttons, but the current quit handler closes the form after the prompt branch as well. Selecting Cancel therefore closes the window without saving instead of keeping it open.
 
-PVP_Tact.Save updates or appends rows in H_PVP_Tact.lua but does not remove old rows that are no longer in the editor list. Removing a PVP row can therefore leave its old line in the file. The Kimi and PVP tactic loaders append to their static in-memory collections; repeated imports in one GUI session can show duplicate rows.
+Tactic imports update matching IDs and add new IDs. Repeating an import does not add duplicate Default or monster rows.
 
 ## Kimi-specific tabs
 
@@ -579,7 +582,7 @@ Enable OpportunisticTargeting for nearest eligible ordinary targets. DoNotChase 
 
 The AI no longer rejects movement solely because the destination exceeds the old 14-cell owner limit. Long travel uses short movement requests. The client still supplies visible actors and performs pathfinding: 30 is an AI boundary, not a guarantee of 30-cell visibility or a route around every wall. A detected monster behind a wall may remain unreachable.
 
-The included Ward-30-cell-settings.lua can be loaded with File > Import > Kimi Settings, reviewed, then applied. It selects Ward, enables level-1 Bastion with Always healing below 100% HP and no extra interval, enables opportunistic targeting, disables idle walking, and sets the five distance controls to 30. Review skill levels and other preserved profiles before applying it. On this build, OldHomunType 1 is Ward; 3 is Agile.
+Ward-30-cell-settings.lua is a legacy full-configuration example supported by settings import. It selects Ward, enables level-1 Bastion with Always healing below 100% HP and no extra interval, enables opportunistic targeting, disables idle walking, and sets the five distance controls to 30. Review skill levels and other preserved profiles before applying it. On this build, OldHomunType 1 is Ward; 3 is Agile.
 
 
 UseAutoBD replaces the old Use Body Double automatic toggle. Existing files retain their previous value when imported. Body Double Enabled controls whether the skill can be used; UseAutoBD controls automatic HP-based or timed casting. Automatic checks run during combat and idle states independently of offensive buff mode. Zero owner HP threshold uses timed casting when Body Double Cast Interval is positive; both zero disables automatic casting. Cooldown settings apply to automatic, combo, and manual requests; explicit casts do not require the automatic HP threshold. Master Swap is enabled through Skills & Behavior. Ward, Occult, and Agile expose MasterSwapOwnerHP and MasterSwapCooldown under Automatic Skills. A zero threshold disables automatic swapping; a positive threshold casts at or below that owner HP percentage, subject to skill availability and cooldown. UseMasterSwap is no longer a second enable gate.
@@ -625,9 +628,13 @@ OnlyAOE is available for Ward, Occult, and Raging. Automatic offensive selection
 
 Choose Tank - Gather in Kimi Tactics for the monsters to collect. Set AutoMobCount to the desired group size and TankMonsterLimit up to 30 as its cap. Ward needs Taunt Enabled, a usable level, sufficient SP, and a tactic that permits the skill. Gathering respects Taunt's radius and cooldown; Taunt cannot affect bosses under the server's rules. Terrain routing and the configured owner leash still apply.
 
-Gathering switches to combat when AutoMobCount is reached, capped by TankMonsterLimit. If fewer mobs are available and no nearby eligible targets remain to gather, Kimi starts combat with the smaller group. Gathering Taunt also requires that many eligible mobs within its radius. It uses the attack combo when enabled, otherwise permitted automatic skills and basic attacks. It stays with the collected group instead of returning to the owner between tagged targets. Once the group is gone, ordinary targeting and following resume. Skill Only prevents basic-hit tagging during Taunt cooldown. Other Kimi can gather with basic hits; Taunt is Ward-specific. The limit is a desired count, not a guarantee that an AoE will attract exactly that many monsters.
+Gathering switches to combat when AutoMobCount is reached, capped by TankMonsterLimit. If fewer mobs are available and no nearby eligible targets remain to gather, Kimi starts combat with the smaller group. Taunt can collect targets whenever it is ready and an eligible target is within its radius; AutoMobCount gates the start of combat, not Taunt itself. It uses the attack combo when enabled, otherwise permitted automatic skills and basic attacks. It stays with the collected group instead of returning to the owner between tagged targets. Once the group is gone, ordinary targeting and following resume. Skill Only prevents basic-hit tagging during Taunt cooldown. Other Kimi can gather with basic hits; Taunt is Ward-specific. The limit is a desired count, not a guarantee that an AoE will attract exactly that many monsters.
 
 Body Double timed example: enable Body Double and UseAutoBD, set BodyDoubleOwnerHP to 0 and Body Double Cast Interval to 30. Kimi requests a cast as soon as ready, then waits at least 30 seconds between requests without checking owner HP. Buff duration does not delay recasting. SP availability and current cast timing can delay a request. The saved Lua key remains BodyDoubleCooldown for compatibility.
 
 
 Body Double does not check whether its buff successfully applied or is still active. Automatic casting uses the selected interval and HP mode, skill enable switches, SP, and current cast timing. The interval is measured from the AI cast request; server acceptance is not confirmed.
+
+### Grand Summoning tactic defaults
+
+The editable Grand Summoning rows are Steel Metaling (1589), Sea Spirit (1579), Burning Fang (1575), Autumn Blood (1555), and Chaos Dragon (1590). Missing rows are restored when tactics load; existing custom values are preserved. These default to Ignore, with offensive skill use disabled.

@@ -21,10 +21,15 @@ namespace AzzyAIConfig
         {
             // Read the file contents from fileName and split them into an array of lines
             string file = File.ReadAllText(fileName);
+            LoadText(file);
+        }
+
+        public static void LoadText(string file)
+        {
             string[] lines = file.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 
-            // Check if the file does not contain "MyTact[0]"
-            if (!Regex.IsMatch(file, "MyTact\\[0\\]"))
+            // Add a default only when neither the file nor the loaded tactics contain ID 0.
+            if (!Regex.IsMatch(file, "MyTact\\[0\\]") && object.ReferenceEquals(FindByID(0), null))
             {
                 // Add the default tactic to the tactics collection
                 _tacts.Add(new Tact(0, "Default"));
@@ -321,13 +326,64 @@ namespace AzzyAIConfig
                     {
                         t.TACT_CHASE = TACT_CHASE.CHASE_CLEVER;
                     }
-                    // Add the tactic to the tactics collection
-                    _tacts.Add(t);
+                    // Add new IDs and update tactics already loaded in the collection.
+                    AddOrUpdate(t);
                 }
             }
 
+            EnsureGrandSummoningDefaults();
             // Output to the console "Loading complete."
             Program.WriteLine("Loading complete.");
+        }
+
+        static void EnsureGrandSummoningDefaults()
+        {
+            // Restore missing summon rows without overwriting editable user tactics.
+            int[] ids = { 1589, 1579, 1575, 1555, 1590 };
+            string[] names = { "Steel Metaling", "Sea Spirit", "Burning Fang", "Autumn Blood", "Chaos Dragon" };
+            decimal[] weights = { 0.1m, 0.3m, 0.6m, 1m, 1m };
+            for (int i = 0; i < ids.Length; i++)
+                if (object.ReferenceEquals(FindByID(ids[i]), null))
+                    _tacts.Add(new Tact(ids[i], names[i] + " (Grand Summoning)",
+                        TACT_BASIC.TACT_IGNORE, "SKILL_NEVER", weight: weights[i]));
+        }
+
+        static Tact FindByID(int id)
+        {
+            foreach (Tact tactic in _tacts)
+            {
+                if (tactic.ID == id)
+                {
+                    return tactic;
+                }
+            }
+
+            return null;
+        }
+
+        static void AddOrUpdate(Tact imported)
+        {
+            Tact existing = FindByID(imported.ID);
+            if (object.ReferenceEquals(existing, null))
+            {
+                _tacts.Add(imported);
+                return;
+            }
+
+            existing.Name = imported.Name;
+            existing.TACT_BASIC = imported.TACT_BASIC;
+            existing.TACT_SKILL = imported.TACT_SKILL;
+            existing.TACT_KITE = imported.TACT_KITE;
+            existing.TACT_CAST = imported.TACT_CAST;
+            existing.TACT_PUSHBACK = imported.TACT_PUSHBACK;
+            existing.TACT_DEBUFF = imported.TACT_DEBUFF;
+            existing.TACT_SKILLCLASS = imported.TACT_SKILLCLASS;
+            existing.TACT_RESCUE = imported.TACT_RESCUE;
+            existing.TACT_SP = imported.TACT_SP;
+            existing.TACT_SNIPE = imported.TACT_SNIPE;
+            existing.TACT_KS = imported.TACT_KS;
+            existing.TACT_WEIGHT = imported.TACT_WEIGHT;
+            existing.TACT_CHASE = imported.TACT_CHASE;
         }
 
 

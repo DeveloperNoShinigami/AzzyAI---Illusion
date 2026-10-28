@@ -1032,6 +1032,10 @@ function GetDistance3(id1,id2)
 	return math.sqrt((x1-x2)^2+(y1-y2)^2)
 end
 
+function GetTankPullDistance()
+	return math.min(GetMoveBounds(),math.max(1,math.min(100,tonumber(TankPullDistance) or 30)))
+end
+
 function GetAggroDist()
 	if OwnerPosX[10]==OwnerPosX[1] and OwnerPosY[10]==OwnerPosY[1] then
 		return StationaryAggroDist
@@ -1800,8 +1804,8 @@ end
 
 
 function GetQuickenSkill(myid)
-	-- Body Double has its own HP-based scheduler.
-	return GetReadyKimiSkill(S_QUICK_DEFENSE, myid)
+	-- Body Double and Quick Defense use their own automatic schedulers.
+	return 0, 0
 end
 
 function GetGuardSkill(myid)
@@ -1809,10 +1813,8 @@ function GetGuardSkill(myid)
 	local skill = 0
 
 	if (IsHomun(myid) == 1) then
-		if GetKimiType(myid) == WARD then
-			-- Bastion Renewal is scheduled by DoHealingTasks and its HP threshold.
-			return GetReadyKimiSkill(S_WARD_DOMAIN, myid)
-		end
+		-- Ward's Domain uses HP/SP thresholds in DoAutoWardDomain.
+		-- Bastion Renewal is scheduled by DoHealingTasks.
 		return 0, 0
 	else
 		for i,v in ipairs(GuardSkillList) do
@@ -2031,6 +2033,10 @@ function DoSkill(skill, level, target, mode, targx, targy)
 		TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..tostring(target).." mode:"..tostring(targetMode).." delay "..delay)
 	end
 	TraceAI("DoSkill: "..FormatSkill(skill, level).." target:"..tostring(target).." mode:"..tostring(targetMode).." delay "..delay)
+	if skill == S_WARD_DOMAIN then
+		local duration = GetSkillInfo(skill, 8, level) or 30000
+		WardDomainActiveUntil = (WardDomainActiveUntil or 0) > timeTick and 0 or timeTick + duration
+	end
 	local cooldownRemaining = AutoSkillCooldown[skill] and (AutoSkillCooldown[skill]-GetTick()) or 0
 	logappend("AAI_SKILLFAIL", "DoSkill: "..FormatSkill(skill, level)..", target: "..tostring(target)..", mode: "..tostring(targetMode)..", delay: "..delay.. ", cooldown: "..cooldownRemaining)
 

@@ -81,7 +81,7 @@ namespace AzzyAIConfig
                 var page = new TabPage(name) { Tag = type, BackColor = Color.White, Padding = new Padding(8) };
                 var header = new Panel { Dock = DockStyle.Top, Height = 170, BackColor = Color.FromArgb(248, 247, 245) };
                 header.Controls.Add(new Label { Text = name + " Kimi", ForeColor = accent, Font = new Font(Font.FontFamily, 18, FontStyle.Bold), Location = new Point(14, 15), AutoSize = true });
-                header.Controls.Add(new Label { Text = "Skills and behavior for " + name + ".\nStandard combos are saved separately for this Kimi.\nShared skills use the same values across applicable tabs.\nViewing this tab does not change the selected Kimi.", Location = new Point(16, 55), AutoSize = true });
+                header.Controls.Add(new Label { Text = "Skills and behavior for " + name + ".\nStandard combos are saved separately for this Kimi.\nCommon skills use one shared value across profiles where they appear.\nImporting this profile can update those shared skills.", Location = new Point(16, 55), AutoSize = true });
                 var portrait = new KimiPortrait(name.ToLowerInvariant()) { Dock = DockStyle.Right, Width = 155 };
                 header.Controls.Add(portrait);
                 var sections = new TabControl { Dock = DockStyle.Fill };

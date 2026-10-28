@@ -4,6 +4,6 @@
 --To remove friends, put merc/homun into standby mode, and sit 1 cell to the east (to right in default view) of the person you want to remove.
 --
 --To add KOS/Enemy/Etc lists, get the ID number from ROPD or by friending them, and make a line like
---MyFriends{2322797}=KOS
+--MyFriends[2322797]=KOS
 --Possible values are NEUTRAL, KOS (kill on sight), ENEMY (assume hostile, but don't attack), and ALLY (assume friendly).
 MyFriends={}

@@ -898,6 +898,8 @@ namespace AzzyAIConfig
 
             _TankMonsterLimit = Convert.ToInt32(((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["TankMonsterLimit"].Attributes[typeof(DefaultValueAttribute)]).Value);
 
+            _TankPullDistance = Convert.ToInt32(((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["TankPullDistance"].Attributes[typeof(DefaultValueAttribute)]).Value);
+
             _RescueOwnerLowHP = Convert.ToInt32(((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["RescueOwnerLowHP"].Attributes[typeof(DefaultValueAttribute)]).Value);
 
             _StationaryAggroDist = Convert.ToInt32(((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["StationaryAggroDist"].Attributes[typeof(DefaultValueAttribute)]).Value);
@@ -1009,6 +1011,10 @@ namespace AzzyAIConfig
             _HealSelfHP = Convert.ToInt32(((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["HealSelfHP"].Attributes[typeof(DefaultValueAttribute)]).Value);
 
             _UseAutoHeal = (UseAutoHealOptions)((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["UseAutoHeal"].Attributes[typeof(DefaultValueAttribute)]).Value;
+
+            QuickDefenseHP = Convert.ToInt32(((DefaultValueAttribute)TypeDescriptor.GetProperties(this)["QuickDefenseHP"].Attributes[typeof(DefaultValueAttribute)]).Value);
+            WardDomainHPThreshold = 0;
+            WardDomainSPStopThreshold = 20;
 
             // Kiting Options
 
@@ -1192,6 +1198,8 @@ namespace AzzyAIConfig
 
             H_Config.TankMonsterLimit = _TankMonsterLimit;
 
+            H_Config.TankPullDistance = _TankPullDistance;
+
             H_Config.RescueOwnerLowHP = _RescueOwnerLowHP;
 
             H_Config.StationaryAggroDist = _StationaryAggroDist;
@@ -1307,6 +1315,10 @@ namespace AzzyAIConfig
             H_Config.UseBodyDouble = _UseBodyDouble;
 
             H_Config.BodyDoubleCooldown = BodyDoubleCooldown;
+
+            H_Config.QuickDefenseHP = QuickDefenseHP;
+            H_Config.WardDomainHPThreshold = WardDomainHPThreshold;
+            H_Config.WardDomainSPStopThreshold = WardDomainSPStopThreshold;
 
             H_Config.BastionRenewalCooldown = BastionRenewalCooldown;
 
@@ -1522,6 +1534,8 @@ namespace AzzyAIConfig
 
             _TankMonsterLimit = H_Config.TankMonsterLimit;
 
+            _TankPullDistance = H_Config.TankPullDistance;
+
             _RescueOwnerLowHP = H_Config.RescueOwnerLowHP;
 
             _StationaryAggroDist = H_Config.StationaryAggroDist;
@@ -1641,6 +1655,10 @@ namespace AzzyAIConfig
             _UseBodyDouble = H_Config.UseBodyDouble;
 
             BodyDoubleCooldown = H_Config.BodyDoubleCooldown;
+
+            QuickDefenseHP = H_Config.QuickDefenseHP;
+            WardDomainHPThreshold = H_Config.WardDomainHPThreshold;
+            WardDomainSPStopThreshold = H_Config.WardDomainSPStopThreshold;
 
             BastionRenewalCooldown = H_Config.BastionRenewalCooldown;
 
@@ -2165,6 +2183,60 @@ namespace AzzyAIConfig
                 {
 
                     _TankMonsterLimit = value;
+
+                }
+
+            }
+
+        }
+
+        int _TankPullDistance = 30;
+
+        [Category("Basic Options"),
+
+        DisplayName("Pull Distance"),
+
+        Description(
+
+            "Maximum distance in cells from the owner to seek new monsters for Tank - Pull and Tank - Gather. " +
+
+            "Limited by movement bounds and client visibility."
+
+            ),
+
+        DefaultValue(30)]
+
+        public int TankPullDistance
+
+        {
+
+            get { return _TankPullDistance; }
+
+            set
+
+            {
+
+                if (value < 1)
+
+                {
+
+                    _TankPullDistance = 1;
+
+                }
+
+                else if (value > 100)
+
+                {
+
+                    _TankPullDistance = 100;
+
+                }
+
+                else
+
+                {
+
+                    _TankPullDistance = value;
 
                 }
 
@@ -5196,6 +5268,24 @@ namespace AzzyAIConfig
          Description("Interval in seconds between Body Double casts. With owner HP threshold 0 and interval greater than 0, automatically cast without checking HP. With a positive threshold, cast only at or below that HP percentage. Both 0 disables automatic casting. Requires UseAutoBD and Body Double Enabled. Body Double has no built-in cooldown; its buff duration does not delay recasting. SP and current cast timing still apply.")]
 
         public int BodyDoubleCooldown { get { return _BodyDoubleCooldown; } set { _BodyDoubleCooldown = Math.Max(0,Math.Min(3600,value)); } }
+
+        int _QuickDefenseHP;
+
+        [Category("Autobuff Options"), DisplayName("Quick Defense HP Threshold"), DefaultValue(0),
+
+         Description("Automatically cast enabled Quick Defense when Kimi's own HP is BELOW this percentage. 0 disables automatic casting. SP, current cast timing, and the native cooldown still apply.")]
+
+        public int QuickDefenseHP { get { return _QuickDefenseHP; } set { _QuickDefenseHP = Math.Max(0, Math.Min(100, value)); } }
+
+        int _WardDomainHPThreshold;
+        [Category("Autobuff Options"), DisplayName("Ward Domain Owner/Ally HP Threshold"), DefaultValue(0),
+         Description("Automatically activate Ward Domain when the owner or a visible friend is below this HP percentage. Ward Kimi's own HP does not trigger it. 0 disables automatic use. Requires Ward Domain Enabled in Skills & Behavior.")]
+        public int WardDomainHPThreshold { get { return _WardDomainHPThreshold; } set { _WardDomainHPThreshold = Math.Max(0, Math.Min(100, value)); } }
+
+        int _WardDomainSPStopThreshold = 20;
+        [Category("Autobuff Options"), DisplayName("Ward Domain SP Stop Threshold"), DefaultValue(20),
+         Description("Recast Ward Domain to cancel its active aura when Ward Kimi SP is at or below this percentage. The aura starts only when SP is above this value. Uses Ward Kimi SP.")]
+        public int WardDomainSPStopThreshold { get { return _WardDomainSPStopThreshold; } set { _WardDomainSPStopThreshold = Math.Max(0, Math.Min(100, value)); } }
 
         int _BastionRenewalCooldown;
 

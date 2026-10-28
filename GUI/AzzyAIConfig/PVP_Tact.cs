@@ -10,6 +10,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 
 namespace AzzyAIConfig
@@ -20,10 +21,15 @@ namespace AzzyAIConfig
         {
             // Read the file contents from fileName and split them into an array of lines
             string file = File.ReadAllText(fileName);
+            LoadText(file);
+        }
+
+        public static void LoadText(string file)
+        {
             string[] lines = file.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 
             // Check if the file does not contain "MyPVPTact[0]"
-            if (!Regex.IsMatch(file, "MyPVPTact\\[0\\]"))
+            if (!Regex.IsMatch(file, "MyPVPTact\\[0\\]") && object.ReferenceEquals(FindByID("0"), null))
             {
                 // Add the default tactic to the tactics collection
                 _tacts.Add(new PvpTact("0"));
@@ -274,13 +280,45 @@ namespace AzzyAIConfig
                         t.TACT_RESCUE = TACT_RESCUE.RESCUE_ALL;
                     }
 
-                    // Add the tactic to the tactics collection
-                    _tacts.Add(t);
+                    // Add new IDs and update tactics already loaded in the collection.
+                    AddOrUpdate(t);
                 }
             }
 
             // Output to the console "Loading complete."
             Program.WriteLine("Loading complete.");
+        }
+
+        static PvpTact FindByID(string id)
+        {
+            foreach (PvpTact tactic in _tacts)
+            {
+                if (string.Equals(tactic.ID, id, StringComparison.Ordinal))
+                {
+                    return tactic;
+                }
+            }
+
+            return null;
+        }
+
+        static void AddOrUpdate(PvpTact imported)
+        {
+            PvpTact existing = FindByID(imported.ID);
+            if (object.ReferenceEquals(existing, null))
+            {
+                _tacts.Add(imported);
+                return;
+            }
+
+            existing.TACT_BASIC = imported.TACT_BASIC;
+            existing.TACT_SKILL = imported.TACT_SKILL;
+            existing.TACT_KITE = imported.TACT_KITE;
+            existing.TACT_CAST = imported.TACT_CAST;
+            existing.TACT_PUSHBACK = imported.TACT_PUSHBACK;
+            existing.TACT_DEBUFF = imported.TACT_DEBUFF;
+            existing.TACT_SKILLCLASS = imported.TACT_SKILLCLASS;
+            existing.TACT_RESCUE = imported.TACT_RESCUE;
         }
 
 
@@ -306,6 +344,9 @@ namespace AzzyAIConfig
                 }
             }
 
+            // Remove any duplicate definitions already present in the imported file.
+            file = RemoveDuplicateTacticLines(file);
+
             // Output to the console "Saving to file: fileName"
             Program.WriteLine("Saving to file: {0}", fileName);
 
@@ -314,6 +355,36 @@ namespace AzzyAIConfig
 
             // Output to the console "Saving complete."
             Program.WriteLine("Saving complete.");
+        }
+
+        static string RemoveDuplicateTacticLines(string file)
+        {
+            string[] parts = Regex.Split(file, "(\\r\\n|\\n|\\r)");
+            List<string> seenIds = new List<string>();
+            StringBuilder uniqueFile = new StringBuilder(file.Length);
+
+            for (int i = 0; i < parts.Length; i += 2)
+            {
+                Match definition = Regex.Match(parts[i], @"^\s*MyPVPTact\[([^\]]+)\]\s*=");
+                if (definition.Success)
+                {
+                    string id = definition.Groups[1].Value;
+                    if (seenIds.Contains(id))
+                    {
+                        continue;
+                    }
+
+                    seenIds.Add(id);
+                }
+
+                uniqueFile.Append(parts[i]);
+                if (i + 1 < parts.Length)
+                {
+                    uniqueFile.Append(parts[i + 1]);
+                }
+            }
+
+            return uniqueFile.ToString();
         }
 
 

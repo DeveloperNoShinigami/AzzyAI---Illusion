@@ -88,6 +88,32 @@ namespace AzzyAIConfig
             // Load the configurations from the file
             PVP_Tact.Load(file);
 
+            RefreshTacticsList();
+        }
+
+        internal void OpenText(string contents)
+        {
+            PVP_Tact.LoadText(contents ?? String.Empty);
+            RefreshTacticsList();
+        }
+
+        internal string ExportText()
+        {
+            string temporaryPath = Path.GetTempFileName();
+            try
+            {
+                PVP_Tact.Save(temporaryPath);
+                return File.ReadAllText(temporaryPath);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
+        }
+
+        void RefreshTacticsList()
+        {
+
             // Create a new tactics array
             PvpTact[] items = new PvpTact[PVP_Tact.Tactics.Count];
 
@@ -101,7 +127,7 @@ namespace AzzyAIConfig
             listBoxTactics.Items.AddRange(items);
 
             // Set the listBoxTactics selected index to 0
-            listBoxTactics.SelectedIndex = 0;
+            if (listBoxTactics.Items.Count > 0) listBoxTactics.SelectedIndex = 0;
         }
 
         #region Private Properties
